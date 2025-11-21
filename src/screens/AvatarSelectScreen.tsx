@@ -1,5 +1,6 @@
 import React from "react";
-import { User } from "../App";
+import type { User } from "../App";
+
 
 interface Props {
   nickname: string;

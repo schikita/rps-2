@@ -484,3 +484,248 @@ body {
   font-size: 0.85rem;
   opacity: 0.85;
 }
+
+
+.avatar-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.avatar-option {
+  width: 85px;
+  height: 85px;
+  border-radius: 16px;
+  object-fit: cover;
+  cursor: pointer;
+  transition: 0.15s;
+  border: 2px solid transparent;
+}
+
+.avatar-option:hover {
+  transform: scale(1.05);
+}
+
+.avatar-selected {
+  border: 2px solid #38bdf8;
+  box-shadow: 0 0 12px rgba(56,189,248,0.6);
+}
+
+.upload-block {
+  margin-top: 16px;
+  text-align: center;
+}
+
+.upload-label {
+  padding: 10px 16px;
+  border: 1px dashed #38bdf8;
+  border-radius: 14px;
+  cursor: pointer;
+  color: #38bdf8;
+  font-size: 0.85rem;
+}
+
+.selected-preview {
+  margin-top: 14px;
+  text-align: center;
+}
+
+.selected-avatar-preview {
+  width: 80px;
+  height: 80px;
+  border-radius: 16px;
+  margin-top: 6px;
+  object-fit: cover;
+  border: 2px solid rgba(255,255,255,0.4);
+}
+
+/* HUD общие */
+.hud-top,
+.hud-bottom {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+}
+
+.hud-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 12px;
+  object-fit: cover;
+  border: 2px solid rgba(255,255,255,0.4);
+}
+
+.hud-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.hud-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.hud-score {
+  font-size: 0.8rem;
+  color: #9ca3af;
+}
+
+/* кнопка выхода */
+.logout-btn {
+  margin-left: auto;
+  padding: 6px 12px;
+  border-radius: 12px;
+  background: rgba(255, 80, 80, 0.25);
+  border: 1px solid rgba(255, 110, 110, 0.6);
+  color: #ffbaba;
+  font-size: 0.75rem;
+}
+
+.hands-arena {
+  position: relative;
+  width: 100%;
+   max-width: 320px;
+   height: 300px;
+   margin-top: 10px;
+}
+
+.hand {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* рука бота — сверху */
+.hand--bot {
+  top: 0;
+}
+
+.hand-image--bot {
+  width: 90px;
+  max-width: 90px;
+  height: auto;
+  transform: translateY(0) rotate(180deg);
+  filter: drop-shadow(0 0 20px rgba(0,255,255,0.4));
+}
+
+/* рука игрока — снизу */
+.hand--player {
+  bottom: 0;
+}
+
+.hand-image--player {
+  width: 120px;
+  max-width: 120px;
+  height: auto;
+  filter: drop-shadow(0 0 20px rgba(255,0,255,0.4));
+}
+
+/* уменьшение вертикальности */
+.hand-image {
+  object-fit: contain;
+}
+
+/* тряска */
+.hand--shake .hand-image {
+  animation: shake 0.3s ease-in-out infinite;
+}
+
+@keyframes shake {
+  0%   { transform: translateX(-3px); }
+  50%  { transform: translateX(3px); }
+  100% { transform: translateX(-3px); }
+}
+
+/* обратный отсчёт */
+.hands-countdown {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 3rem;
+  font-weight: 700;
+  color: #38bdf8;
+  text-shadow: 0 0 20px rgba(56,189,248,0.8);
+}
+
+/* панель лобби */
+.lobby-panel {
+  text-align: center;
+  padding: 14px 10px 18px;
+}
+
+.lobby-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.lobby-text {
+  font-size: 0.8rem;
+  color: #9ca3af;
+  margin-bottom: 12px;
+}
+
+/* счёт раундов */
+.round-score {
+  margin-top: 8px;
+  text-align: center;
+  font-size: 0.85rem;
+  color: #e5e7eb;
+}
+
+.hud-bottom {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background: rgba(15, 23, 42, 0.4);
+  backdrop-filter: blur(8px);
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  z-index: 20;
+}
+
+.game-screen .app-content {
+  padding-bottom: 90px; /* чтобы контент не заезжал на игрока */
+}
+
+
+/* оверлей завершения матча */
+.match-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15,23,42,0.85);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.match-card {
+  background: radial-gradient(circle at 0 0, rgba(56,189,248,0.4), transparent 60%),
+              radial-gradient(circle at 100% 100%, rgba(236,72,153,0.4), transparent 60%),
+              #020617;
+  border-radius: 24px;
+  padding: 18px 20px 22px;
+  max-width: 320px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 20px 40px rgba(15,23,42,0.9);
+  border: 1px solid rgba(129,140,248,0.6);
+}
+
+.match-title {
+  margin: 0 0 8px;
+  font-size: 1.1rem;
+}
+
+.match-score {
+  margin: 0 0 14px;
+  font-size: 0.9rem;
+  color: #e5e7eb;
+}
