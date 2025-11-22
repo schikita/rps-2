@@ -1,6 +1,5 @@
 import React from "react";
 
-// Импорты файлов — важно!
 import skin1 from "../assets/avatars/skin-1.jpg";
 import skin2 from "../assets/avatars/skin-2.jpg";
 import skin3 from "../assets/avatars/skin-3.jpg";
