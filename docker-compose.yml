@@ -1,0 +1,7 @@
+services:
+  cyber-rps:
+    build: .
+    container_name: cyber-rps
+    restart: unless-stopped
+    ports:
+      - "80:80"   # если 80 уже занят — поменяй, например "8080:80"
