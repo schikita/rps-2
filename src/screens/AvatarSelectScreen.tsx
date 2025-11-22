@@ -9,12 +9,12 @@ interface Props {
 
 export const AvatarSelectScreen: React.FC<Props> = ({ nickname, onSelect }) => {
   const presetAvatars = [
-    "/src/assets/avatars/skin-1.jpg",
-    "/src/assets/avatars/2.png",
-    "/src/assets/avatars/3.png",
-    "/src/assets/avatars/4.png",
-    "/src/assets/avatars/5.png",
-    "/src/assets/avatars/6.png",
+     "../assets//avatars/skin-1.jpg",
+     "../assets//avatars/skin-2.jpg",
+     "../assets//avatars/skin-3.jpg",
+     "../assets//avatars/skin-4.jpg",
+     "../assets//avatars/skin-5.jpg",
+    "../assets//avatars/skin-6.jpg",
   ];
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
