@@ -1,19 +1,19 @@
 import React from "react";
 
-import skin1 from "../assets/avatars/skin-1.jpg";
-import skin2 from "../assets/avatars/skin-2.jpg";
-import skin3 from "../assets/avatars/skin-3.jpg";
-import skin4 from "../assets/avatars/skin-4.jpg";
-import skin5 from "../assets/avatars/skin-5.jpg";
-import skin6 from "../assets/avatars/skin-6.jpg";
-
 interface Props {
   nickname: string;
   onSelect: (avatar: string) => void;
 }
 
 export const AvatarSelectScreen: React.FC<Props> = ({ nickname, onSelect }) => {
-  const presetAvatars: string[] = [skin1, skin2, skin3, skin4, skin5, skin6];
+  const presetAvatars: string[] = [
+    "/avatars/skin-1.jpg",
+    "/avatars/skin-2.jpg",
+    "/avatars/skin-3.jpg",
+    "/avatars/skin-4.jpg",
+    "/avatars/skin-5.jpg",
+    "/avatars/skin-6.jpg",
+  ];
 
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
