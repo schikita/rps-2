@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { AuthScreen } from "./screens/AuthScreen";
-import { GamePreview } from "./screens/GamePreview";
+import { GameNavigator } from "./screens/GameNavigator"; // <-- Импортируем новое меню
 
 export type User = {
   nickname: string;
@@ -31,7 +31,8 @@ const App: React.FC = () => {
 
   if (!user) return <AuthScreen onLogin={handleLogin} />;
 
-  return <GamePreview user={user} onLogout={logout} />;
+  // <-- Здесь вызываем Навигатор вместо старого Превью
+  return <GameNavigator user={user} onLogout={logout} />;
 };
 
 export default App;

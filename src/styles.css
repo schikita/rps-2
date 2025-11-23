@@ -730,3 +730,216 @@ body {
   font-size: 0.9rem;
   color: #e5e7eb;
 }
+
+.pill-btn.selected {
+  background: #facc15; /* Yellow/Gold to indicate selection */
+  color: #000;
+  box-shadow: 0 0 15px rgba(250, 204, 21, 0.6);
+  border-color: #facc15;
+  transform: scale(1.05);
+}
+
+.timer-display {
+  text-align: center;
+  font-size: 2rem;
+  font-weight: bold;
+  color: #22d3ee;
+  margin: 10px 0;
+  text-shadow: 0 0 10px rgba(34, 211, 238, 0.5);
+}
+
+/* --- WALLET & BETTING --- */
+
+/* src/styles.css */
+
+.wallet-widget {
+  /* Убрали position: absolute, top, right */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(250, 204, 21, 0.4);
+  padding: 6px 12px;
+  border-radius: 999px;
+  box-shadow: 0 0 15px rgba(250, 204, 21, 0.15);
+  height: fit-content; /* Чтобы не растягивался */
+}
+
+.coin-icon {
+  font-size: 1.1rem;
+}
+
+.wallet-amount {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: #facc15; /* Желтый/Золотой */
+  font-feature-settings: "tnum"; /* Моноширинные цифры */
+}
+
+/* Контролы ставок в лобби */
+.bet-controls {
+  margin: 14px 0 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+
+.bet-label {
+  font-size: 0.8rem;
+  color: #9ca3af;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.bet-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bet-input {
+  width: 100px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid #38bdf8;
+  color: #fff;
+  padding: 8px;
+  border-radius: 12px;
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: bold;
+  outline: none;
+}
+
+.bet-btn-quick {
+  background: rgba(56, 189, 248, 0.15);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #38bdf8;
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  transition: 0.2s;
+}
+
+.bet-btn-quick:hover {
+  background: rgba(56, 189, 248, 0.3);
+}
+
+.error-msg {
+  color: #f87171;
+  font-size: 0.8rem;
+  margin-top: 4px;
+  animation: shake 0.3s;
+}
+
+/* Анимации переходов */
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Меню */
+.secondary-btn {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: #fff;
+  padding: 10px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+.secondary-btn.logout {
+    border-color: rgba(248, 113, 113, 0.5);
+    color: #fca5a5;
+}
+
+/* Турнирная сетка */
+.bracket-node {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    padding: 10px;
+    width: 120px;
+    text-align: center;
+    position: relative;
+}
+.bracket-node.final {
+    border-color: #facc15;
+    box-shadow: 0 0 15px rgba(250, 204, 21, 0.2);
+    width: 140px;
+}
+.player {
+    font-size: 0.85rem;
+    padding: 2px 0;
+}
+.p-win { color: #4ade80; font-weight: bold; }
+.p-lose { color: #9ca3af; text-decoration: line-through; opacity: 0.6; }
+
+.menu-footer {
+  margin-top: auto;       /* Прижимает к низу контейнера */
+  padding-top: 30px;      /* Воздух сверху */
+  padding-bottom: 10px;   /* <--- УМЕНЬШИЛИ (кнопки опустились ниже) */
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 12px;
+}
+
+/* Кнопка Магазина - Яркая, призывающая */
+.btn-action-shop {
+  border: none;
+  border-radius: 20px;
+  background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%); /* Фиолетовый -> Розовый */
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 14px 20px;
+  cursor: pointer;
+  box-shadow: 0 10px 25px rgba(236, 72, 153, 0.4);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.btn-action-shop:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 15px 35px rgba(236, 72, 153, 0.6);
+  filter: brightness(1.1);
+}
+
+.btn-action-shop:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+/* Кнопка Выхода - Стеклянная, красная */
+.btn-action-exit {
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  border-radius: 20px;
+  background: rgba(239, 68, 68, 0.1);
+  color: #fca5a5;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-action-exit:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: rgba(248, 113, 113, 0.6);
+  color: #fff;
+  transform: translateY(-2px);
+}
+
+.btn-action-exit:active {
+  transform: translateY(1px) scale(0.98);
+}
