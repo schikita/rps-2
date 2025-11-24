@@ -20,6 +20,7 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgres://rps:rps123@db:5432/rps_game
+      JWT_SECRET: super_secret_change_me
     ports:
       - "3001:3001"
     depends_on:
