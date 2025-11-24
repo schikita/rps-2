@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from "react";
+import React, { useRef, useState, } from "react";
 import type { User } from "../App";
 import { HandFightAnimation } from "../components/HandFightAnimation";
 import { getBotMove, detectWinner, type Move } from "../engine/rps";
@@ -19,7 +19,7 @@ const BOT = {
   avatar: "/src/assets/avatars/skin-6.jpg", 
 };
 
-export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, setBalance, onBack, themeColor }) => {
+export const GameScreen: React.FC<GameScreenProps> = ({  mode, balance, setBalance, onBack, themeColor }) => {
   const [betAmount, setBetAmount] = useState<number>(mode === "bot" ? 0 : 50);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
