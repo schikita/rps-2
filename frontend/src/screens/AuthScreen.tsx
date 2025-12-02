@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 
-// --- NO IMPORTS NEEDED ---
-// We reference the files directly from the public folder
+// --- PUBLIC IMAGES ---
 const PRESET_AVATARS = [
   "/avatars/skin-1.jpg",
   "/avatars/skin-2.jpg",
@@ -12,92 +11,100 @@ const PRESET_AVATARS = [
 ];
 
 interface AuthScreenProps {
-  onLogin: (nickname: string, avatar: string) => void;
+  onLoginSuccess: (userData: any, token: string) => void;
 }
 
-export const AuthScreen: React.FC<AuthScreenProps> = ({ onLogin }) => {
-  const [nickname, setNickname] = useState("");
-  const [selectedAvatar, setSelectedAvatar] = useState<string | null>(null);
+export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
+  const [isRegistering, setIsRegistering] = useState(false);
+  
+  // FIX 1: Change state name to nickname
+  const [nickname, setNickname] = useState(""); 
+  const [password, setPassword] = useState("");
+  const [selectedAvatar, setSelectedAvatar] = useState<string>(PRESET_AVATARS[0]);
   const [error, setError] = useState("");
 
-  const handleCustomAvatar = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      setSelectedAvatar(reader.result as string);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!nickname.trim()) {
-      setError("Введите никнейм.");
-      return;
+    setError("");
+
+    const endpoint = isRegistering ? "/auth/register" : "/auth/login";
+    
+    // FIX 2: Send 'nickname' in the JSON body (Backend expects this!)
+    const payload = isRegistering 
+      ? { nickname, password, avatar: selectedAvatar }
+      : { nickname, password };
+
+    try {
+      const res = await fetch(`http://localhost:3000${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) throw new Error(data.error || "Something went wrong");
+
+      if (isRegistering) {
+        setIsRegistering(false);
+        alert("Account created! Please log in.");
+      } else {
+        onLoginSuccess(data.user, data.token);
+      }
+    } catch (err: any) {
+      setError(err.message);
     }
-    if (!selectedAvatar) {
-      setError("Выберите аватар.");
-      return;
-    }
-    onLogin(nickname.trim(), selectedAvatar);
   };
 
   return (
     <div className="app-root auth-screen">
       <div className="app-gradient-bg" />
       <div className="app-content">
-
         <h1 className="logo-title">CYBER RPS</h1>
-        <p className="logo-subtitle">СОЗДАЙ СВОЙ ОБРАЗ</p>
+        <p className="logo-subtitle">{isRegistering ? "РЕГИСТРАЦИЯ" : "ВХОД В СИСТЕМУ"}</p>
 
         <form onSubmit={handleSubmit} className="auth-form">
           <label className="auth-label">
             Никнейм
-            <input
-              type="text"
-              value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
-              className="auth-input"
-              placeholder="Введите ваш ник"
-              maxLength={20}
+            {/* FIX 3: Bind input to nickname */}
+            <input 
+                type="text" 
+                value={nickname} 
+                onChange={e => setNickname(e.target.value)} 
+                className="auth-input" 
+                required 
             />
           </label>
 
-          <p className="auth-subtitle">Выберите аватар:</p>
+          <label className="auth-label">
+            Пароль
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="auth-input" required />
+          </label>
 
-          <div className="avatar-grid">
-            {PRESET_AVATARS.map((src, i) => (
-              <img
-                key={i}
-                src={src}
-                className={`avatar-option ${selectedAvatar === src ? "avatar-selected" : ""}`}
-                onClick={() => setSelectedAvatar(src)}
-                alt={`Skin ${i + 1}`}
-              />
-            ))}
-          </div>
-
-          <div className="upload-block">
-            <label className="upload-label">
-              Загрузить свой аватар
-              <input type="file" accept="image/*" hidden onChange={handleCustomAvatar} />
-            </label>
-          </div>
-
-          {selectedAvatar && (
-            <div className="selected-preview">
-              <p>Вы выбрали:</p>
-              <img src={selectedAvatar} className="selected-avatar-preview" alt="Selected" />
+          {isRegistering && (
+            <div className="avatar-section">
+              <p className="auth-subtitle">Выберите аватар:</p>
+              <div className="avatar-grid">
+                {PRESET_AVATARS.map((src, i) => (
+                  <img 
+                    key={i} src={src} 
+                    className={`avatar-option ${selectedAvatar === src ? "avatar-selected" : ""}`}
+                    onClick={() => setSelectedAvatar(src)} 
+                  />
+                ))}
+              </div>
             </div>
           )}
 
           {error && <p className="auth-error">{error}</p>}
 
           <button type="submit" className="primary-btn">
-            Продолжить
+            {isRegistering ? "Создать аккаунт" : "Войти"}
           </button>
+
+          <p style={{textAlign:'center', marginTop: 15, color: '#aaa', cursor:'pointer'}} onClick={() => setIsRegistering(!isRegistering)}>
+            {isRegistering ? "Уже есть аккаунт? Войти" : "Нет аккаунта? Создать"}
+          </p>
         </form>
       </div>
     </div>
