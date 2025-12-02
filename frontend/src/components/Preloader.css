@@ -1,0 +1,31 @@
+.preloader-container {
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at center, #0b0e1c, #05050a);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.preloader-logo {
+  width: 180px;
+  margin-bottom: 30px;
+  filter: drop-shadow(0 0 10px #00d9ff);
+}
+
+.preloader-spinner {
+  width: 55px;
+  height: 55px;
+  border: 6px solid rgba(0, 212, 255, 0.25);
+  border-top-color: #00eaff;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  100% {
+    transform: rotate(360deg);
+  }
+}

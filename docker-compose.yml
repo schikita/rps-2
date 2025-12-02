@@ -1,7 +1,36 @@
+version: "3.9"
+
 services:
+  db:
+    image: postgres:17
+    container_name: rps_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: rps
+      POSTGRES_PASSWORD: rps123
+      POSTGRES_DB: rps_game
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  backend:
+    build: ./backend
+    container_name: rps_backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://rps:rps123@db:5432/rps_game
+      JWT_SECRET: super_secret_change_me
+    ports:
+      - "3001:3001"
+    depends_on:
+      - db
+
   cyber-rps:
-    build: .
+    build: ./frontend
     container_name: cyber-rps
     restart: unless-stopped
     ports:
       - "8090:80"
+    depends_on:
+      - backend
