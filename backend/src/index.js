@@ -11,11 +11,10 @@ app.use(express.json());
 app.use(cors());
 
 // --- 1. SETUP SQLITE DATABASE ---
-// This creates a file named "game_database.sqlite" in your backend folder
 const sequelize = new Sequelize({
     dialect: "sqlite",
     storage: path.join(__dirname, "../game_database.sqlite"), 
-    logging: false, // Set to console.log to see SQL queries
+    logging: false, 
 });
 
 // --- 2. DEFINE USER MODEL ---
@@ -24,6 +23,15 @@ const User = sequelize.define("User", {
         type: DataTypes.STRING,
         unique: true,
         allowNull: false,
+    },
+    // ✅ NEW: Added Email Field
+    email: {
+        type: DataTypes.STRING,
+        unique: true,
+        allowNull: false,
+        validate: {
+            isEmail: true // Ensures valid email format
+        }
     },
     password_hash: {
         type: DataTypes.STRING,
@@ -40,13 +48,13 @@ const User = sequelize.define("User", {
 });
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret";
-// IMPORTANT: I changed this to 3000 because your Frontend tries to connect to 3000
 const PORT = 3000; 
 
 // --- 3. SYNC DB & START SERVER ---
 async function startServer() {
     try {
-        await sequelize.sync(); // Creates table if it doesn't exist
+        // ✅ UPDATED: { alter: true } adds the 'email' column to existing DB if missing
+        await sequelize.sync({ alter: true }); 
         console.log("✅ SQLite Database connected & tables ready");
         
         app.listen(PORT, "0.0.0.0", () =>
@@ -63,19 +71,22 @@ app.get("/health", (req, res) => {
     res.json({ ok: true, database: "sqlite" });
 });
 
+// --- REGISTER (Nickname + Email + Password) ---
 app.post("/auth/register", async (req, res) => {
     try {
-        const { nickname, password, avatar } = req.body;
+        // ✅ TYPO FIXED HERE (Removed 'fv')
+        const { nickname, email, password, avatar } = req.body;
 
-        if (!nickname || !password) {
-            return res.status(400).json({ error: "nickname and password required" });
+        if (!nickname || !email || !password) {
+            return res.status(400).json({ error: "nickname, email, and password required" });
         }
 
         const hash = await bcrypt.hash(password, 10);
 
-        // Create user using Sequelize
+        // Create user
         const newUser = await User.create({
             nickname,
+            email,
             password_hash: hash,
             avatar: avatar || null
         });
@@ -87,24 +98,31 @@ app.post("/auth/register", async (req, res) => {
             user: {
                 id: newUser.id,
                 nickname: newUser.nickname,
+                email: newUser.email,
                 avatar: newUser.avatar,
                 points: newUser.points
             }
         });
     } catch (e) {
         console.error(e);
+        // Handle duplicate errors specifically
         if (e.name === "SequelizeUniqueConstraintError") {
-            return res.status(400).json({ error: "nickname already exists" });
+            const field = e.errors[0].path; // will be 'nickname' or 'email'
+            return res.status(400).json({ error: `${field} already exists` });
+        }
+        if (e.name === "SequelizeValidationError") {
+            return res.status(400).json({ error: "Invalid email format" });
         }
         res.status(500).json({ error: "server error" });
     }
 });
 
+// --- LOGIN (Nickname Only) ---
 app.post("/auth/login", async (req, res) => {
     try {
         const { nickname, password } = req.body;
 
-        // Find user using Sequelize
+        // Find user by nickname
         const user = await User.findOne({ where: { nickname } });
 
         if (!user) {
@@ -122,6 +140,7 @@ app.post("/auth/login", async (req, res) => {
             user: {
                 id: user.id,
                 nickname: user.nickname,
+                email: user.email, // Return email to frontend
                 avatar: user.avatar,
                 points: user.points
             }

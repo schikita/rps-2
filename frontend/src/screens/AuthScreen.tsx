@@ -17,8 +17,9 @@ interface AuthScreenProps {
 export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
   const [isRegistering, setIsRegistering] = useState(false);
   
-  // FIX 1: Change state name to nickname
   const [nickname, setNickname] = useState(""); 
+  // 1. ADD EMAIL STATE
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [selectedAvatar, setSelectedAvatar] = useState<string>(PRESET_AVATARS[0]);
   const [error, setError] = useState("");
@@ -29,13 +30,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
 
     const endpoint = isRegistering ? "/auth/register" : "/auth/login";
     
-    // FIX 2: Send 'nickname' in the JSON body (Backend expects this!)
+    // 2. INCLUDE EMAIL IN REGISTRATION PAYLOAD
     const payload = isRegistering 
-      ? { nickname, password, avatar: selectedAvatar }
+      ? { nickname, email, password, avatar: selectedAvatar }
       : { nickname, password };
 
     try {
-      const res = await fetch(`http://localhost:3000${endpoint}`, {
+      const res = await fetch(`http://185.244.50.22:3000${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -66,7 +67,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
         <form onSubmit={handleSubmit} className="auth-form">
           <label className="auth-label">
             Никнейм
-            {/* FIX 3: Bind input to nickname */}
             <input 
                 type="text" 
                 value={nickname} 
@@ -75,6 +75,20 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
                 required 
             />
           </label>
+
+          {/* 3. ADD EMAIL INPUT (Visible only during registration) */}
+          {isRegistering && (
+            <label className="auth-label">
+              Email
+              <input 
+                  type="email" 
+                  value={email} 
+                  onChange={e => setEmail(e.target.value)} 
+                  className="auth-input" 
+                  required 
+              />
+            </label>
+          )}
 
           <label className="auth-label">
             Пароль
