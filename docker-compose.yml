@@ -7,7 +7,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: rps
-      POSTGRES_PASSWORD: rps123
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: rps_game
     volumes:
       - ./pgdata:/var/lib/postgresql/data
