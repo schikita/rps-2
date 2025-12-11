@@ -1,30 +1,31 @@
 import React, { useRef, useState } from "react";
 import type { User } from "../App";
 import { HandFightAnimation } from "../components/HandFightAnimation";
-import { getBotMove, detectWinner, type Move } from "../engine/rps";
+import { type Move } from "../engine/rps";
+import { API_URL } from "../config";
 
-// --- USE STRING PATH ---
 const BOT_AVATAR = "/avatars/skin-6.jpg";
-
 type Phase = "lobby" | "idle" | "countdown" | "reveal" | "matchOver";
+const BET_OPTIONS = [50, 100, 200, 300, 500, 1000, 2000, 5000];
 
 interface GameScreenProps {
   user: User;
   mode: "bot" | "pvp";
   balance: number;
-  setBalance: React.Dispatch<React.SetStateAction<number>>;
+  token: string;
+  refreshUser: () => Promise<void>;
   onBack: () => void;
+  onOpenWallet: () => void;
   themeColor: string;
 }
 
-const BOT = {
-  name: "Кибер-бот",
-  avatar: BOT_AVATAR, 
-};
+const BOT = { name: "Кибер-бот", avatar: BOT_AVATAR };
 
-export const GameScreen: React.FC<GameScreenProps> = ({ mode, balance, setBalance, onBack, themeColor }) => {
+export const GameScreen: React.FC<GameScreenProps> = ({ mode, balance, token, refreshUser, onBack, onOpenWallet, themeColor }) => {
   const [betAmount, setBetAmount] = useState<number>(mode === "bot" ? 0 : 50);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isBetListOpen, setIsBetListOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const [phase, setPhase] = useState<Phase>("lobby");
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -35,19 +36,24 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, balance, setBalanc
 
   const [playerWins, setPlayerWins] = useState(0);
   const [botWins, setBotWins] = useState(0);
+  
+  const [matchResult, setMatchResult] = useState<"win"|"lose"|null>(null);
+  const [finalProfit, setFinalProfit] = useState(0);
+
   const timerRef = useRef<number | null>(null);
 
-  // --- LOGIC ---
   const updatePlayerMove = (move: Move | null) => {
     setPlayerMove(move);
     playerMoveRef.current = move;
   };
+
   const clearTimer = () => {
     if (timerRef.current !== null) {
       window.clearInterval(timerRef.current);
       timerRef.current = null;
     }
   };
+
   const resetToLobby = () => {
     clearTimer();
     setPhase("lobby");
@@ -56,91 +62,143 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, balance, setBalanc
     setBotMove(null);
     setPlayerWins(0);
     setBotWins(0);
+    setMatchResult(null);
+    setFinalProfit(0);
   };
-  const handleBetChange = (amount: number) => {
-    setBetAmount(amount);
-    setErrorMsg(null);
+
+  const selectBet = (amount: number) => {
+      setBetAmount(amount);
+      setErrorMsg(null);
+      setIsBetListOpen(false);
   };
-  const startArena = () => {
+
+  const startArena = async () => {
     if (mode === "bot") {
         setPhase("idle");
         setPlayerWins(0);
         setBotWins(0);
         return;
     }
-    if (betAmount <= 0) { setErrorMsg("Ставка должна быть > 0"); return; }
+    if (betAmount <= 0) { setErrorMsg("Ставка > 0"); return; }
     if (betAmount > balance) { setErrorMsg("Недостаточно средств!"); return; }
 
-    setBalance((prev) => prev - betAmount);
-    setPhase("idle");
-    setPlayerWins(0);
-    setBotWins(0);
+    setIsLoading(true);
+    try {
+        const res = await fetch(`${API_URL}/api/bet/start`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+            body: JSON.stringify({ betAmount }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            setErrorMsg(data.error || "Ошибка");
+            setIsLoading(false);
+            return;
+        }
+        await refreshUser();
+        setPhase("idle");
+        setPlayerWins(0);
+        setBotWins(0);
+    } catch (e) { setErrorMsg("Ошибка сети"); }
+    setIsLoading(false);
   };
+
   const handleMoveClick = (move: Move) => {
+    if (phase === "reveal" || phase === "matchOver") return;
     updatePlayerMove(move);
-    if (phase === "countdown") return;
-    if (phase === "idle" || phase === "reveal") startCountdown();
+    if (phase === "idle") startCountdown();
   };
+
   const startCountdown = () => {
     clearTimer();
     setPhase("countdown");
     setBotMove(null);
-    setCountdown(5);
-    let current = 5;
+    setCountdown(3);
+    let current = 3;
     const id = window.setInterval(() => {
       current -= 1;
       setCountdown(current);
       if (current <= 0) {
         clearTimer();
-        finalizeRound();
+        playRoundOnServer();
       }
     }, 1000);
     timerRef.current = id;
   };
-  const finalizeRound = () => {
-    const finalPlayerMove = playerMoveRef.current || "rock";
-    const finalBotMove = getBotMove();
-    setBotMove(finalBotMove);
-    const outcome = detectWinner(finalPlayerMove, finalBotMove);
-    let newPlayerWins = playerWins;
-    let newBotWins = botWins;
-    if (outcome === "win") newPlayerWins += 1;
-    if (outcome === "lose") newBotWins += 1;
-    setPlayerWins(newPlayerWins);
-    setBotWins(newBotWins);
-    if (newPlayerWins >= 3 || newBotWins >= 3) {
-      setPhase("matchOver");
-      handleMatchEnd(newPlayerWins >= 3);
-    } else {
-      setPhase("reveal");
-      setTimeout(() => {
-         if(newPlayerWins < 3 && newBotWins < 3) {
-             setPhase("idle");
-             updatePlayerMove(null);
-             setBotMove(null);
-         }
-      }, 3000); 
-    }
-  };
-  const handleMatchEnd = (isPlayerWinner: boolean) => {
-    if (mode === "bot") {
-        if (isPlayerWinner) setBalance(prev => prev + 15);
-    } else {
-        if (isPlayerWinner) setBalance(prev => prev + betAmount * 2);
-    }
-  };
-  const matchWinner = playerWins >= 3 ? "player" : botWins >= 3 ? "bot" : null;
 
-  // --- RENDER ---
+  const playRoundOnServer = async () => {
+    const finalPlayerMove = playerMoveRef.current || "rock";
+
+    try {
+        const res = await fetch(`${API_URL}/api/match/round`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+            body: JSON.stringify({ playerMove: finalPlayerMove }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error("Round Error");
+
+        setBotMove(data.botMove);
+        
+        let newP = playerWins;
+        let newB = botWins;
+        if (data.result === 'win') newP++;
+        if (data.result === 'lose') newB++;
+        
+        setPlayerWins(newP);
+        setBotWins(newB);
+        setPhase("reveal");
+
+        if (newP >= 3 || newB >= 3) {
+            setTimeout(() => finishMatch(newP >= 3), 1000);
+        } else {
+            setTimeout(() => {
+                setPhase("idle");
+                updatePlayerMove(null);
+                setBotMove(null);
+            }, 1000);
+        }
+
+    } catch (e) {
+        console.error(e);
+        resetToLobby();
+    }
+  };
+
+  const finishMatch = async (isWinner: boolean) => {
+      try {
+        const res = await fetch(`${API_URL}/api/match/end`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+            body: JSON.stringify({ mode, isWinner, betAmount }),
+        });
+        const data = await res.json();
+        
+        // Use 'data' for error handling (Satisfies linter)
+        if (!res.ok) {
+            console.error("Finish Error:", data.error);
+            return;
+        }
+        
+        setFinalProfit(isWinner ? (mode === 'bot' ? 15 : betAmount) : -betAmount);
+        setMatchResult(isWinner ? "win" : "lose");
+        setPhase("matchOver");
+        await refreshUser();
+        
+      } catch (e) { console.error(e); }
+  };
+
+  const isGameActive = phase !== "lobby";
+
   return (
     <div style={{height: '100%', display: 'flex', flexDirection: 'column'}}>
         {/* Header */}
         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: '0 4px'}}>
-            <button onClick={onBack} style={{background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', width: 36, height: 36, color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>←</button>
-            <span style={{color: mode === 'pvp' ? '#f87171' : '#4ade80', fontWeight: '800', letterSpacing: '0.05em', fontSize: '0.9rem'}}>
-                {mode === 'pvp' ? 'PvP АРЕНА' : 'ТРЕНИРОВКА'}
+            <button onClick={onBack} className="back-btn">← Назад</button>
+            <span className="game-header-title" style={{color: mode === 'pvp' ? '#f87171' : '#4ade80'}}>
+                {mode === 'pvp' ? 'ТУРНИР' : 'ТРЕНИРОВКА'}
             </span>
-            <div className="wallet-widget" style={{position: 'static', margin: 0, borderColor: themeColor}}>
+            <div className={`wallet-widget ${isGameActive ? 'disabled' : 'menu-card'}`} onClick={isGameActive ? undefined : onOpenWallet} style={{borderColor: themeColor, padding: '8px 12px', borderRadius: '999px', gap: 8, margin: 0}}>
                 <span className="coin-icon">💰</span>
                 <span style={{color: themeColor, fontWeight:'bold'}}>{balance}</span>
             </div>
@@ -149,20 +207,33 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, balance, setBalanc
         {/* Lobby */}
         {phase === "lobby" && (
             <div className="lobby-panel" style={{marginTop: 40}}>
+              <div style={{fontSize: '3rem', marginBottom: 10, textAlign:'center'}}>{mode === 'bot' ? '🤖' : '⚔️'}</div>
               {mode === "bot" ? (
                   <>
-                    <p className="lobby-title">Тренировка с Ботом</p>
-                    <p className="lobby-text">Награда за победу: 15 💰</p>
-                    <button className="primary-btn" onClick={startArena} style={{background: themeColor, color: '#000'}}>Начать бой</button>
+                    <p className="lobby-title">Тренировка</p>
+                    <p className="lobby-text">Победа: +15 💰</p>
+                    <button className="primary-btn" onClick={startArena} style={{'--theme-color': themeColor} as React.CSSProperties}>Начать бой</button>
                   </>
               ) : (
                   <>
-                    <p className="lobby-title">Ставка на матч</p>
-                    <div className="bet-controls">
-                        <input type="number" className="bet-input" value={betAmount} onChange={(e) => handleBetChange(Number(e.target.value))} style={{borderColor: themeColor}} />
-                        {errorMsg && <p className="error-msg">{errorMsg}</p>}
+                    <p className="lobby-title">Ставка</p>
+                    <div className="bet-dropdown-container">
+                        <div className="bet-dropdown-trigger" onClick={() => !isLoading && setIsBetListOpen(!isBetListOpen)} style={{borderColor: themeColor, opacity: isLoading ? 0.5 : 1}}>
+                            <span>{betAmount} 💰</span>
+                            <span style={{transform: isBetListOpen ? 'rotate(180deg)' : 'rotate(0)', transition: '0.2s'}}>▼</span>
+                        </div>
+                        {isBetListOpen && !isLoading && (
+                            <div className="bet-dropdown-menu">
+                                {BET_OPTIONS.map(amount => (
+                                    <div key={amount} className={`bet-option ${betAmount === amount ? "active" : ""}`} onClick={() => selectBet(amount)}>{amount} 💰</div>
+                                ))}
+                            </div>
+                        )}
                     </div>
-                    <button className="primary-btn" onClick={startArena} style={{background: themeColor, color: '#000'}}>Играть на {betAmount} 💰</button>
+                    {errorMsg && <p className="error-msg">{errorMsg}</p>}
+                    <button className="primary-btn" onClick={startArena} disabled={isLoading} style={{'--theme-color': themeColor, marginTop: 10} as React.CSSProperties}>
+                        {isLoading ? "Загрузка..." : "Играть"}
+                    </button>
                   </>
               )}
             </div>
@@ -179,56 +250,45 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, balance, setBalanc
                 </div>
               </div>
 
-              <HandFightAnimation
-                phase={phase === "idle" ? "idle" : phase === "matchOver" ? "reveal" : (phase as any)}
-                countdown={countdown}
-                playerMove={playerMove}
-                botMove={botMove}
-              />
+              <HandFightAnimation phase={phase === "idle" ? "idle" : phase === "matchOver" ? "reveal" : phase} countdown={countdown} playerMove={playerMove} botMove={botMove} />
               
-              <div style={{textAlign:'center', margin: '10px 0', fontSize:'1.2rem', fontWeight:'bold'}}>
-                  {playerWins} : {botWins}
-              </div>
+              <div style={{textAlign:'center', margin: '10px 0', fontSize:'1.2rem', fontWeight:'bold'}}>{playerWins} : {botWins}</div>
 
-              {/* BUTTONS */}
               <div className="moves-row">
                 {['rock', 'scissors', 'paper'].map((m) => {
                     const isSelected = playerMove === m;
+                    const isDisabled = phase === "reveal" || phase === "matchOver"; 
                     return (
                         <button 
                             key={m}
-                            className="pill-btn" 
+                            className={`game-btn ${isSelected ? 'selected' : ''} ${isDisabled && !isSelected ? 'dimmed' : ''}`}
                             onClick={() => handleMoveClick(m as Move)} 
-                            disabled={phase==="matchOver"}
-                            style={{
-                                background: isSelected ? themeColor : 'rgba(255,255,255,0.05)',
-                                borderColor: isSelected ? themeColor : 'rgba(56, 189, 248, 0.6)',
-                                color: isSelected ? '#000' : '#fff',
-                                boxShadow: isSelected ? `0 0 15px ${themeColor}` : 'none',
-                                transform: isSelected ? 'scale(1.05)' : 'scale(1)',
-                            }}
+                            disabled={isDisabled}
+                            style={{'--theme-color': themeColor} as React.CSSProperties}
                         >
                             {m === 'rock' ? 'КАМЕНЬ' : m === 'scissors' ? 'НОЖНИЦЫ' : 'БУМАГА'}
                         </button>
                     )
                 })}
               </div>
-
               {phase === "countdown" && <p className="auth-hint" style={{textAlign:'center', color: themeColor}}>Таймер: {countdown}с</p>}
             </>
         )}
 
-        {/* Result */}
+        {/* Result Overlay */}
         {phase === "matchOver" && (
           <div className="match-overlay">
             <div className="match-card" style={{borderColor: themeColor}}>
-              <h2 className="match-title">{matchWinner === "player" ? "ПОБЕДА!" : "ПОРАЖЕНИЕ"}</h2>
-              <p className="match-score">
-                 {matchWinner === "player" 
-                    ? (mode === 'bot' ? "+15 💰" : `+${betAmount} 💰`) 
-                    : "0 💰"}
-              </p>
-              <button className="primary-btn" onClick={resetToLobby} style={{background: themeColor, color: '#000'}}>В лобби</button>
+              <div style={{fontSize: '4rem', marginBottom: '10px'}}>
+                  {matchResult === "win" ? "🏆" : "💀"}
+              </div>
+              <h2 className="match-title">{matchResult === "win" ? "ПОБЕДА!" : "ПОРАЖЕНИЕ"}</h2>
+              
+              <div className="match-score" style={{fontSize: '1.5rem', margin: '15px 0', color: finalProfit >= 0 ? '#4ade80' : '#f87171'}}>
+                 {finalProfit > 0 ? `+${finalProfit} 💰` : `${finalProfit} 💰`}
+              </div>
+              
+              <button className="primary-btn" onClick={resetToLobby} style={{'--theme-color': themeColor} as React.CSSProperties}>В лобби</button>
               <button className="secondary-btn" style={{marginTop:10, width:'100%'}} onClick={onBack}>В меню</button>
             </div>
           </div>

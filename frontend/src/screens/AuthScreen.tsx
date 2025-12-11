@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { API_URL } from "../config"; // IMPORT CONFIG
 
 // --- PUBLIC IMAGES ---
 const PRESET_AVATARS = [
@@ -18,7 +19,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
   const [isRegistering, setIsRegistering] = useState(false);
   
   const [nickname, setNickname] = useState(""); 
-  // 1. ADD EMAIL STATE
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [selectedAvatar, setSelectedAvatar] = useState<string>(PRESET_AVATARS[0]);
@@ -30,13 +30,13 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
 
     const endpoint = isRegistering ? "/auth/register" : "/auth/login";
     
-    // 2. INCLUDE EMAIL IN REGISTRATION PAYLOAD
     const payload = isRegistering 
       ? { nickname, email, password, avatar: selectedAvatar }
       : { nickname, password };
 
     try {
-      const res = await fetch(`http://185.244.50.22:3000${endpoint}`, {
+      // USE API_URL HERE
+      const res = await fetch(`${API_URL}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -72,11 +72,11 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
                 value={nickname} 
                 onChange={e => setNickname(e.target.value)} 
                 className="auth-input" 
+                placeholder="Твой никнейм"
                 required 
             />
           </label>
 
-          {/* 3. ADD EMAIL INPUT (Visible only during registration) */}
           {isRegistering && (
             <label className="auth-label">
               Email
@@ -85,6 +85,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
                   value={email} 
                   onChange={e => setEmail(e.target.value)} 
                   className="auth-input" 
+                  placeholder="Твой email"
                   required 
               />
             </label>
@@ -92,12 +93,12 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
 
           <label className="auth-label">
             Пароль
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="auth-input" required />
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="auth-input" placeholder="Пароль" required />
           </label>
 
           {isRegistering && (
             <div className="avatar-section">
-              <p className="auth-subtitle">Выберите аватар:</p>
+              <p className="auth-subtitle" style={{marginTop:10}}>Выберите аватар:</p>
               <div className="avatar-grid">
                 {PRESET_AVATARS.map((src, i) => (
                   <img 
@@ -116,7 +117,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
             {isRegistering ? "Создать аккаунт" : "Войти"}
           </button>
 
-          <p style={{textAlign:'center', marginTop: 15, color: '#aaa', cursor:'pointer'}} onClick={() => setIsRegistering(!isRegistering)}>
+          <p style={{textAlign:'center', marginTop: 15, color: '#aaa', cursor:'pointer', fontSize:'0.9rem'}} onClick={() => setIsRegistering(!isRegistering)}>
             {isRegistering ? "Уже есть аккаунт? Войти" : "Нет аккаунта? Создать"}
           </p>
         </form>
