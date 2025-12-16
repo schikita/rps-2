@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { API_URL } from "../config"; // IMPORT CONFIG
+import { API_URL } from "../config";
+import { CustomModal } from "../components/CustomModal";
 
 // --- PUBLIC IMAGES ---
 const PRESET_AVATARS = [
@@ -22,11 +23,25 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [selectedAvatar, setSelectedAvatar] = useState<string>(PRESET_AVATARS[0]);
-  const [error, setError] = useState("");
+  
+  // Modal State
+  const [modal, setModal] = useState<{ isOpen: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    type: "info"
+  });
+
+  const showModal = (title: string, message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setModal({ isOpen: true, title, message, type });
+  };
+
+  const closeModal = () => {
+    setModal(prev => ({ ...prev, isOpen: false }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError("");
 
     const endpoint = isRegistering ? "/auth/register" : "/auth/login";
     
@@ -35,7 +50,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
       : { nickname, password };
 
     try {
-      // USE API_URL HERE
       const res = await fetch(`${API_URL}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -48,18 +62,30 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
 
       if (isRegistering) {
         setIsRegistering(false);
-        alert("Account created! Please log in.");
+        // Success Modal
+        showModal("ACCOUNT CREATED", "Your account has been created successfully! Please log in.", "success");
       } else {
         onLoginSuccess(data.user, data.token);
       }
     } catch (err: any) {
-      setError(err.message);
+      // Error Modal
+      showModal("AUTHENTICATION FAILED", err.message, "error");
     }
   };
 
   return (
     <div className="app-root auth-screen">
       <div className="app-gradient-bg" />
+      
+      {/* Modal Component */}
+      <CustomModal 
+        isOpen={modal.isOpen} 
+        title={modal.title} 
+        message={modal.message} 
+        type={modal.type} 
+        onClose={closeModal} 
+      />
+
       <div className="app-content">
         <h1 className="logo-title">CYBER RPS</h1>
         <p className="logo-subtitle">{isRegistering ? "РЕГИСТРАЦИЯ" : "ВХОД В СИСТЕМУ"}</p>
@@ -110,8 +136,6 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
               </div>
             </div>
           )}
-
-          {error && <p className="auth-error">{error}</p>}
 
           <button type="submit" className="primary-btn">
             {isRegistering ? "Создать аккаунт" : "Войти"}

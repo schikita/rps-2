@@ -3,6 +3,7 @@ import type { User } from "../App";
 import { HandFightAnimation } from "../components/HandFightAnimation";
 import { type Move } from "../engine/rps";
 import { API_URL } from "../config";
+import { useSound } from "../sounds/useSound"; // Import sounds
 
 const BOT_AVATAR = "/avatars/skin-6.jpg";
 type Phase = "lobby" | "idle" | "countdown" | "reveal" | "matchOver";
@@ -21,7 +22,7 @@ interface GameScreenProps {
 
 const BOT = { name: "Кибер-бот", avatar: BOT_AVATAR };
 
-export const GameScreen: React.FC<GameScreenProps> = ({ mode, balance, token, refreshUser, onBack, onOpenWallet, themeColor }) => {
+export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, token, refreshUser, onBack, onOpenWallet, themeColor }) => {
   const [betAmount, setBetAmount] = useState<number>(mode === "bot" ? 0 : 50);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isBetListOpen, setIsBetListOpen] = useState(false);
@@ -42,6 +43,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, balance, token, re
 
   const timerRef = useRef<number | null>(null);
 
+  const playSound = useSound(); // Initialize sound
+
   const updatePlayerMove = (move: Move | null) => {
     setPlayerMove(move);
     playerMoveRef.current = move;
@@ -55,6 +58,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, balance, token, re
   };
 
   const resetToLobby = () => {
+    playSound('click_main'); // Sound for Lobby button
     clearTimer();
     setPhase("lobby");
     setCountdown(null);
@@ -67,12 +71,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, balance, token, re
   };
 
   const selectBet = (amount: number) => {
+      playSound('click_sharp'); // Sound for bet selection
       setBetAmount(amount);
       setErrorMsg(null);
       setIsBetListOpen(false);
   };
 
   const startArena = async () => {
+    playSound('click_main'); // Sound for Start button
     if (mode === "bot") {
         setPhase("idle");
         setPlayerWins(0);
@@ -105,6 +111,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, balance, token, re
 
   const handleMoveClick = (move: Move) => {
     if (phase === "reveal" || phase === "matchOver") return;
+    playSound('click_sharp'); // Sound for move selection
     updatePlayerMove(move);
     if (phase === "idle") startCountdown();
   };
@@ -174,11 +181,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, balance, token, re
         });
         const data = await res.json();
         
-        // Use 'data' for error handling (Satisfies linter)
         if (!res.ok) {
             console.error("Finish Error:", data.error);
             return;
         }
+        
+        if (isWinner) playSound('success'); // Victory sound
         
         setFinalProfit(isWinner ? (mode === 'bot' ? 15 : betAmount) : -betAmount);
         setMatchResult(isWinner ? "win" : "lose");
@@ -198,10 +206,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, balance, token, re
             <span className="game-header-title" style={{color: mode === 'pvp' ? '#f87171' : '#4ade80'}}>
                 {mode === 'pvp' ? 'ТУРНИР' : 'ТРЕНИРОВКА'}
             </span>
-            <div className={`wallet-widget ${isGameActive ? 'disabled' : 'menu-card'}`} onClick={isGameActive ? undefined : onOpenWallet} style={{borderColor: themeColor, padding: '8px 12px', borderRadius: '999px', gap: 8, margin: 0}}>
-                <span className="coin-icon">💰</span>
-                <span style={{color: themeColor, fontWeight:'bold'}}>{balance}</span>
-            </div>
+            {/* Show wallet widget here only in Lobby */}
+            {!isGameActive && (
+                <div className="wallet-widget menu-card" onClick={onOpenWallet} style={{borderColor: themeColor, padding: '8px 12px', borderRadius: '999px', gap: 8, margin: 0}}>
+                    <span className="coin-icon">💰</span>
+                    <span style={{color: themeColor, fontWeight:'bold'}}>{balance}</span>
+                </div>
+            )}
+            {isGameActive && <div style={{width: 60}}></div>} {/* Placeholder for centering */}
         </div>
 
         {/* Lobby */}
@@ -241,7 +253,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, balance, token, re
 
         {/* Arena */}
         {phase !== "lobby" && (
-            <>
+            <div style={{display: 'flex', flexDirection: 'column', height: '100%'}}>
+              
+              {/* 1. OPPONENT HUD (Top) */}
               <div className="hud-top"> 
                 <img src={BOT.avatar} className="hud-avatar" alt="Bot Avatar" />
                 <div className="hud-info">
@@ -250,11 +264,18 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, balance, token, re
                 </div>
               </div>
 
-              <HandFightAnimation phase={phase === "idle" ? "idle" : phase === "matchOver" ? "reveal" : phase} countdown={countdown} playerMove={playerMove} botMove={botMove} />
-              
-              <div style={{textAlign:'center', margin: '10px 0', fontSize:'1.2rem', fontWeight:'bold'}}>{playerWins} : {botWins}</div>
+              {/* 2. BATTLEFIELD (Center) */}
+              <div style={{flex: 1, position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'center'}}>
+                  <HandFightAnimation phase={phase === "idle" ? "idle" : phase === "matchOver" ? "reveal" : phase} countdown={countdown} playerMove={playerMove} botMove={botMove} />
+                  
+                  {/* Score big display */}
+                  <div style={{textAlign:'center', marginTop: -10, marginBottom: 10, fontSize:'1.5rem', fontWeight:'800', letterSpacing:'2px', zIndex: 10, textShadow: '0 0 10px rgba(0,0,0,0.5)'}}>
+                      <span style={{color: themeColor}}>{playerWins}</span> : <span style={{color: '#f87171'}}>{botWins}</span>
+                  </div>
+              </div>
 
-              <div className="moves-row">
+              {/* 3. CONTROLS (Buttons) */}
+              <div className="moves-row" style={{marginBottom: 12}}>
                 {['rock', 'scissors', 'paper'].map((m) => {
                     const isSelected = playerMove === m;
                     const isDisabled = phase === "reveal" || phase === "matchOver"; 
@@ -271,8 +292,33 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, balance, token, re
                     )
                 })}
               </div>
-              {phase === "countdown" && <p className="auth-hint" style={{textAlign:'center', color: themeColor}}>Таймер: {countdown}с</p>}
-            </>
+
+              {/* 4. PLAYER PROFILE (Bottom) */}
+              <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: '10px 14px',
+                  background: 'rgba(15, 23, 42, 0.6)',
+                  border: `1px solid ${themeColor}`,
+                  borderRadius: '16px',
+                  boxShadow: `0 4px 20px ${themeColor}20`
+              }}>
+                  <img src={user.avatar} style={{width: 44, height: 44, borderRadius: '50%', border: `2px solid ${themeColor}`, objectFit: 'cover'}} alt="Me" />
+                  <div style={{flex: 1}}>
+                      <div style={{fontWeight: 'bold', fontSize: '0.95rem'}}>{user.nickname}</div>
+                      <div style={{fontSize: '0.85rem', color: '#facc15', display:'flex', alignItems:'center', gap:4}}>
+                          <span>💰</span> {balance}
+                      </div>
+                  </div>
+                  <div style={{textAlign: 'right'}}>
+                      <div style={{fontSize: '0.65rem', color: '#9ca3af', textTransform: 'uppercase', letterSpacing:'0.05em'}}>Победы</div>
+                      <div style={{fontWeight: '800', fontSize: '1.2rem', color: '#fff'}}>{playerWins}</div>
+                  </div>
+              </div>
+
+              {phase === "countdown" && <p className="auth-hint" style={{textAlign:'center', color: themeColor, position:'absolute', top:'45%', left:0, right:0, fontSize: '1.2rem', fontWeight:'bold', textShadow:'0 0 10px rgba(0,0,0,0.8)'}}>Таймер: {countdown}с</p>}
+            </div>
         )}
 
         {/* Result Overlay */}

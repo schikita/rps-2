@@ -9,8 +9,9 @@ export type User = {
   email: string;
   avatar: string;
   points: number;
-  inventory: string;
-  last_claim_date?: string; // NEW: Track daily bonus
+  inventory: number[];
+  last_claim_date?: string;
+  streak: number; // NUOVO CAMPO
 };
 
 const STORAGE_KEY_USER = "cyber-rps-user";
@@ -21,24 +22,37 @@ const getToken = () => localStorage.getItem(STORAGE_KEY_TOKEN);
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
 
+  const mapBackendUserToFrontend = (data: any): User => {
+    const inv: number[] = data.Items ? data.Items.map((i: any) => i.id) : [];
+    
+    return {
+        id: data.id,
+        nickname: data.username || data.nickname,
+        email: data.email,
+        avatar: data.avatar || "/avatars/skin-1.jpg",
+        points: data.coins !== undefined ? data.coins : 1000, 
+        inventory: inv,
+        last_claim_date: data.lastLoginDate || data.last_claim_date,
+        streak: data.loginStreak || 0 // Mappiamo lo streak dal DB
+    };
+  };
+
   const refreshUser = async () => {
     const token = getToken();
     if (!token) return;
 
     try {
         const res = await fetch(`${API_URL}/api/user`, {
-            headers: {
-                "Authorization": `Bearer ${token}`
-            }
+            headers: { "Authorization": `Bearer ${token}` }
         });
 
         if (!res.ok) {
             if (res.status === 403 || res.status === 401) logout();
-            throw new Error("Failed to fetch user data");
+            return;
         }
 
         const data = await res.json();
-        const updatedUser: User = data.user;
+        const updatedUser = mapBackendUserToFrontend(data.user);
         
         localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(updatedUser));
         setUser(updatedUser);
@@ -59,19 +73,9 @@ const App: React.FC = () => {
   }, []);
 
   const handleLoginSuccess = (userData: any, token: string) => {
-    const newUser: User = { 
-        id: userData.id,
-        nickname: userData.nickname,
-        email: userData.email, 
-        avatar: userData.avatar, 
-        points: userData.points,
-        inventory: userData.inventory || '["default"]',
-        last_claim_date: userData.last_claim_date // Save date
-    };
-
+    const newUser = mapBackendUserToFrontend(userData);
     localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(newUser));
     localStorage.setItem(STORAGE_KEY_TOKEN, token);
-
     setUser(newUser);
   };
 

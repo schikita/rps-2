@@ -635,3 +635,74 @@ button, .menu-card, .shop-btn, .back-btn, .bet-dropdown-trigger, .wallet-widget 
 .btn-action-exit:active { transform: translateY(1px) scale(0.98); }
 
 .error-msg { color: #f87171; font-size: 0.8rem; margin-top: 4px; animation: shake 0.3s; }
+
+/* === DAILY BONUS GRID === */
+.bonus-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 10px;
+  flex: 1;
+}
+
+.bonus-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  overflow: hidden;
+}
+
+/* Giorno 7 (Grande) */
+.bonus-card.big-reward {
+  grid-column: 1 / span 3;
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), transparent);
+}
+
+/* STATO: PRONTO DA RISCUOTERE (Active) */
+.bonus-card.active {
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.08);
+  /* Usiamo la variabile CSS definita nel componente React per il colore */
+  border-color: var(--bonus-theme); 
+  box-shadow: 0 0 15px var(--bonus-theme);
+  animation: pulse-glow 2s infinite;
+  z-index: 10;
+}
+
+/* Effetto Mouse (Hover) solo su Active */
+.bonus-card.active:hover {
+  transform: translateY(-4px) scale(1.05);
+  background: var(--bonus-theme); /* Diventa del colore dello skin */
+  border-color: #fff;
+  box-shadow: 0 10px 30px var(--bonus-theme);
+  color: #000; /* Testo nero per contrasto */
+}
+
+/* Per cambiare il colore del testo interno durante l'hover */
+.bonus-card.active:hover .bonus-day-text { color: rgba(0,0,0,0.7) !important; }
+.bonus-card.active:hover .bonus-amount-text { color: #000 !important; }
+
+/* STATO: GIÀ RISCOSSO (Dark/Claimed) */
+.bonus-card.claimed {
+  background: #000;
+  border-color: #1e293b;
+  opacity: 0.4;
+  filter: grayscale(1);
+  transform: scale(0.95);
+}
+
+.bonus-card.claimed .bonus-day-text { color: #22c55e !important; font-weight: bold; }
+
+@keyframes pulse-glow {
+  0% { box-shadow: 0 0 0 0 var(--bonus-theme); }
+  70% { box-shadow: 0 0 0 6px rgba(0, 0, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0); }
+}

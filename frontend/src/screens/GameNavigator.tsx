@@ -1,24 +1,23 @@
 import React, { useState, useEffect } from "react";
 import type { User } from "../App";
 import { GameScreen } from "./GameScreen";
+import { DailyBonusScreen } from "./DailyBonusScreen";
 import { API_URL } from "../config";
+import { CustomModal } from "../components/CustomModal";
+import { useSound } from "../sounds/useSound"; // Import sounds
 
-type Screen = "menu" | "game" | "shop" | "tournament" | "profile" | "wallet";
+type Screen = "menu" | "game" | "shop" | "tournament" | "profile" | "wallet" | "daily";
 type NavContext = "menu" | "game"; 
 
 interface Skin {
-  id: string;
+  id: number;
   name: string;
   price: number;
   color: string;
+  imageId: string;
 }
 
-const SHOP_ITEMS: Skin[] = [
-  { id: "default", name: "Стандарт", price: 0, color: "#38bdf8" },
-  { id: "neon_green", name: "Кислота", price: 500, color: "#22c55e" },
-  { id: "gold_rush", name: "Магнат", price: 2000, color: "#facc15" },
-  { id: "cyber_punk", name: "Киберпанк", price: 5000, color: "#ec4899" },
-];
+const DEFAULT_SKIN: Skin = { id: -1, name: "Стандарт", price: 0, color: "#38bdf8", imageId: "default" };
 
 interface GameNavigatorProps {
   user: User;
@@ -28,14 +27,30 @@ interface GameNavigatorProps {
 }
 
 export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, token, refreshUser }) => {
+  const playSound = useSound(); // Initialize sound hook
   
   const userStorageKey = `rps_save_${user.nickname}`;
   const balance = user.points; 
-  const inventory = JSON.parse(user.inventory || '["default"]');
+  const inventory = user.inventory || []; 
 
-  const [equippedSkinId, setEquippedSkinId] = useState<string>(() => {
+  const [shopItems, setShopItems] = useState<Skin[]>([]);
+  
+  const [modal, setModal] = useState<{ isOpen: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({
+    isOpen: false, title: "", message: "", type: "info"
+  });
+
+  const showModal = (title: string, message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setModal({ isOpen: true, title, message, type });
+  };
+
+  const closeModal = () => {
+    playSound('click_soft'); // Sound on close
+    setModal(prev => ({ ...prev, isOpen: false }));
+  };
+
+  const [equippedSkinId, setEquippedSkinId] = useState<number>(() => {
     const saved = localStorage.getItem(userStorageKey);
-    return saved ? JSON.parse(saved).equippedSkinId : "default";
+    return saved ? JSON.parse(saved).equippedSkinId : DEFAULT_SKIN.id;
   });
 
   const [screen, setScreen] = useState<Screen>("menu");
@@ -43,7 +58,14 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
   const [navContext, setNavContext] = useState<NavContext>("menu");
   const [gameMode, setGameMode] = useState<"bot" | "pvp">("bot");
 
-  const isBonusReady = !user.last_claim_date || (new Date().getTime() - new Date(user.last_claim_date).getTime() >= 24 * 60 * 60 * 1000);
+  const isBonusReady = !user.last_claim_date || (new Date().toISOString().split('T')[0] !== user.last_claim_date);
+
+  useEffect(() => {
+    fetch(`${API_URL}/api/shop`)
+        .then(res => res.json())
+        .then(data => setShopItems(data))
+        .catch(err => console.error("Shop load error", err));
+  }, []);
 
   useEffect(() => {
     localStorage.setItem(userStorageKey, JSON.stringify({ equippedSkinId }));
@@ -52,62 +74,119 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        if (modal.isOpen) {
+            closeModal();
+            return;
+        }
+        
+        playSound('click_soft'); // Sound on back/escape
+
         if (screen === "menu") return;
+        
         if (screen === "game") {
             setNavContext("menu");
             setScreen("menu");
-        } else if (screen === "wallet" || screen === "profile") {
-            setScreen(returnScreen);
         } else {
-            setScreen("menu");
+            setScreen(returnScreen);
         }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [screen, returnScreen]);
+  }, [screen, returnScreen, modal.isOpen]);
 
   const handleBuy = async (item: Skin) => {
+    playSound('click_sharp'); // Click sound
     try {
-      const res = await fetch(`${API_URL}/api/shop/buy`, {
+      const res = await fetch(`${API_URL}/api/buy`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-        body: JSON.stringify({ itemId: item.id, price: item.price }),
+        body: JSON.stringify({ itemId: item.id }),
       });
       const data = await res.json();
-      if (!res.ok) { alert(data.error || "Ошибка"); return; }
+      if (!res.ok) { 
+          showModal("Ошибка", data.error || "Не удалось купить", "error"); 
+          return; 
+      }
+      playSound('success'); // Success sound
       await refreshUser();
-      alert("Скин куплен!");
-    } catch (error) { alert("Ошибка сети"); }
+      showModal("Успех!", `Вы купили ${item.name}!`, "success");
+    } catch (error) { 
+        showModal("Ошибка сети", "Проверьте соединение", "error"); 
+    }
   };
 
   const startGame = (mode: "bot" | "pvp") => {
+    playSound('click_main'); // Start game sound
     setGameMode(mode);
     setNavContext("game");
     setScreen("game");
   };
 
   const exitGame = () => {
+    playSound('click_soft');
     setNavContext("menu");
     setScreen("menu");
   };
 
-  const goToAuxiliaryScreen = (target: "wallet" | "profile") => {
-      if (screen !== "wallet" && screen !== "profile") {
-          setReturnScreen(screen); 
+  const goToAuxiliaryScreen = (target: Screen) => {
+      playSound('click_soft'); // Navigation sound
+      if (screen === "menu" || screen === "game") {
+          setReturnScreen(screen);
       }
       setScreen(target);
   };
 
   const handleBack = () => {
+      playSound('click_soft'); // Back sound
       setScreen(returnScreen);
   };
 
-  const currentThemeColor = SHOP_ITEMS.find(i => i.id === equippedSkinId)?.color || "#38bdf8";
+  const handleEquip = (id: number) => {
+      playSound('click_sharp'); // Equip sound
+      setEquippedSkinId(id);
+  };
+
+  const handleLogout = () => {
+      playSound('click_soft');
+      onLogout();
+  };
+
+  const currentSkin = shopItems.find(i => i.id === equippedSkinId) || DEFAULT_SKIN;
+  const currentThemeColor = currentSkin.color || "#38bdf8";
+
+  const shopCardStyle: React.CSSProperties = {
+      background: 'rgba(255,255,255,0.05)', 
+      padding: 10, 
+      borderRadius: 12, 
+      textAlign: 'center',
+      display: 'flex',          
+      flexDirection: 'column',
+      justifyContent: 'space-between',
+      height: 160 
+  };
+
+  const actionContainerStyle: React.CSSProperties = {
+      marginTop: 'auto', 
+      height: 40,        
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      width: '100%'
+  };
 
   return (
     <div className="app-root">
       <div className="app-gradient-bg" />
+      
+      <CustomModal 
+        isOpen={modal.isOpen} 
+        title={modal.title} 
+        message={modal.message} 
+        type={modal.type} 
+        onClose={closeModal} 
+      />
+
       <div className="app-content" style={{ maxWidth: 448, margin: "0 auto", display: 'flex', flexDirection: 'column', height: '100vh' }}>
         
         {screen !== "game" && (
@@ -123,7 +202,7 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
               
               <div 
                 className="wallet-widget menu-card" 
-                onClick={() => goToAuxiliaryScreen("wallet")}
+                onClick={() => goToAuxiliaryScreen("daily")}
                 style={{borderColor: currentThemeColor, cursor: 'pointer', padding: '8px 12px', borderRadius: '999px', gap: 8, position: 'relative'}}
               >
                   <span className="coin-icon">💰</span> 
@@ -146,41 +225,75 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
 
             <div style={{display:'grid', gap: 14}}>
               <MenuButton title="Тренировка" subtitle="Фарм монет" icon="🤖" onClick={() => startGame("bot")} />
-              <MenuButton title="Арена (PvP)" subtitle="Игра на ставки" icon="⚔️" onClick={() => startGame("pvp")} />
-              <MenuButton title="ТУРНИР" subtitle="Скоро..." icon="🏆" isTournament={true} onClick={() => setScreen("tournament")} />
+              <MenuButton title="Арена PvP" subtitle="Ставки" icon="⚔️" onClick={() => startGame("pvp")} />
+              <MenuButton title="ТУРНИР" subtitle="Скоро..." icon="🏆" isTournament={true} onClick={() => goToAuxiliaryScreen("tournament")} />
             </div>
 
             <div className="menu-footer">
-                <button className="btn-action-shop" onClick={() => setScreen("shop")}><span>🛒</span> Магазин</button>
-                <button className="btn-action-exit" onClick={onLogout}>Выход</button>
+                <button className="btn-action-shop" onClick={() => goToAuxiliaryScreen("shop")}><span>🛒</span> Магазин</button>
+                <button className="btn-action-exit" onClick={handleLogout}>Выход</button>
             </div>
           </div>
         )}
 
         {screen === "shop" && (
-             <div className="animate-fade-in">
-                <button onClick={() => setScreen("menu")} className="back-btn">← Назад</button>
+             <div className="animate-fade-in" style={{height: '100%', display: 'flex', flexDirection: 'column'}}>
+                <button onClick={handleBack} className="back-btn">← Назад</button>
                 <h2>Магазин Скинов</h2>
-                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10}}>
-                    {SHOP_ITEMS.map(item => {
+                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, overflowY: 'auto', paddingBottom: 20}}>
+                    
+                    {/* Item Default */}
+                    <div style={shopCardStyle}>
+                         <div>
+                            <div style={{width:40, height:40, background: DEFAULT_SKIN.color, borderRadius:'50%', margin:'0 auto 10px'}}></div>
+                            <div style={{fontWeight:'bold'}}>Стандарт</div>
+                         </div>
+                         
+                         <div style={actionContainerStyle}>
+                             {equippedSkinId === DEFAULT_SKIN.id ? (
+                                 <div style={{fontSize:'0.8rem', color: DEFAULT_SKIN.color, fontWeight:'bold'}}>ВЫБРАНО</div>
+                             ) : (
+                                 <button className="shop-btn shop-btn-equip" onClick={() => handleEquip(DEFAULT_SKIN.id)} style={{color: DEFAULT_SKIN.color}}>НАДЕТЬ</button>
+                             )}
+                         </div>
+                    </div>
+
+                    {/* Items dal Server */}
+                    {shopItems.map(item => {
                         const isOwned = inventory.includes(item.id);
                         const isEquipped = equippedSkinId === item.id;
                         return (
-                          <div key={item.id} style={{background: 'rgba(255,255,255,0.05)', padding: 10, borderRadius: 12, textAlign:'center'}}>
-                              <div style={{width:40, height:40, background:item.color, borderRadius:'50%', margin:'0 auto 10px', boxShadow: `0 0 15px ${item.color}80`}}></div>
-                              <div style={{fontWeight:'bold'}}>{item.name}</div>
-                              {!isOwned ? (
-                                  <button className="shop-btn shop-btn-buy" onClick={() => handleBuy(item)}>{item.price} 💰</button>
-                              ) : isEquipped ? (
-                                  <div style={{marginTop:8, fontSize:'0.8rem', color: item.color}}>✓ ВЫБРАНО</div>
-                              ) : (
-                                  <button className="shop-btn shop-btn-equip" onClick={() => setEquippedSkinId(item.id)} style={{color: item.color}}>НАДЕТЬ</button>
-                              )}
+                          <div key={item.id} style={shopCardStyle}>
+                              <div>
+                                <div style={{width:40, height:40, background:item.color || '#fff', borderRadius:'50%', margin:'0 auto 10px', boxShadow: `0 0 15px ${item.color}80`}}></div>
+                                <div style={{fontWeight:'bold'}}>{item.name}</div>
+                              </div>
+                              
+                              <div style={actionContainerStyle}>
+                                {!isOwned ? (
+                                    <button className="shop-btn shop-btn-buy" onClick={() => handleBuy(item)}>{item.price} 💰</button>
+                                ) : isEquipped ? (
+                                    <div style={{fontSize:'0.8rem', color: item.color, fontWeight:'bold'}}>ВЫБРАНО</div>
+                                ) : (
+                                    <button className="shop-btn shop-btn-equip" onClick={() => handleEquip(item.id)} style={{color: item.color}}>НАДЕТЬ</button>
+                                )}
+                              </div>
                           </div>
                         )
                     })}
                 </div>
             </div>
+        )}
+
+        {screen === "daily" && (
+            <DailyBonusScreen 
+                user={user} 
+                token={token} 
+                onBack={handleBack} 
+                refreshUser={refreshUser}
+                themeColor={currentThemeColor}
+                showAlert={showModal} 
+            />
         )}
 
         {navContext === "game" && (
@@ -192,112 +305,30 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
                     token={token} 
                     refreshUser={refreshUser}
                     onBack={exitGame}
-                    onOpenWallet={() => goToAuxiliaryScreen("wallet")}
+                    onOpenWallet={() => goToAuxiliaryScreen("daily")}
                     themeColor={currentThemeColor}
                 />
             </div>
         )}
         
-        {screen === "tournament" && <WipScreen title="Турнир" emoji="🚧" onBack={() => setScreen("menu")} />}
+        {screen === "tournament" && <WipScreen title="Турнир" emoji="🚧" onBack={handleBack} />}
         {screen === "profile" && <WipScreen title="Профиль" emoji="👤" onBack={handleBack} />}
-        
-        {screen === "wallet" && (
-            <WalletScreen 
-                user={user}
-                onBack={handleBack} 
-                balance={balance} 
-                token={token} 
-                refreshUser={refreshUser} 
-            />
-        )}
-
       </div>
     </div>
   );
 };
 
-const WalletScreen = ({ onBack, balance, token, refreshUser, user }: any) => {
-    const [loading, setLoading] = useState(false);
-    const [timeLeft, setTimeLeft] = useState<string | null>(null);
-
-    useEffect(() => {
-        const checkTime = () => {
-            if (!user.last_claim_date) {
-                setTimeLeft(null); 
-                return;
-            }
-            const lastClaim = new Date(user.last_claim_date).getTime();
-            const now = new Date().getTime();
-            const cooldown = 24 * 60 * 60 * 1000;
-            const nextClaim = lastClaim + cooldown;
-            const diff = nextClaim - now;
-
-            if (diff <= 0) {
-                setTimeLeft(null);
-            } else {
-                const h = Math.floor((diff / (1000 * 60 * 60)) % 24);
-                const m = Math.floor((diff / (1000 * 60)) % 60);
-                const s = Math.floor((diff / 1000) % 60);
-                setTimeLeft(`${h}ч ${m}м ${s}с`);
-            }
-        };
-        checkTime();
-        const interval = setInterval(checkTime, 1000);
-        return () => clearInterval(interval);
-    }, [user.last_claim_date]);
-
-    const claimBonus = async () => {
-        setLoading(true);
-        try {
-            const res = await fetch(`${API_URL}/api/daily-bonus`, {
-                method: "POST",
-                headers: { "Authorization": `Bearer ${token}` }
-            });
-            const data = await res.json();
-            if (res.ok) {
-                await refreshUser();
-                alert(data.message);
-            } else {
-                alert(data.error);
-            }
-        } catch (e) { alert("Ошибка сервера"); }
-        setLoading(false);
+const MenuButton = ({title, subtitle, icon, onClick, isTournament}: any) => {
+    const containerClass = isTournament ? "menu-card tournament-card" : "menu-card";
+    const playSound = useSound();
+    
+    const handleClick = () => {
+        playSound('click_main');
+        onClick();
     };
 
     return (
-        <div className="animate-fade-in" style={{textAlign:'center', paddingTop: 40}}>
-            <button onClick={onBack} className="back-btn">← Назад</button>
-            <div style={{fontSize: '4rem', marginTop: 20}}>💰</div>
-            <h2 style={{fontFamily: 'Bounded', fontSize:'2rem', margin:'10px 0', color:'#facc15'}}>{balance}</h2>
-            <p style={{color:'#9ca3af', marginBottom: 40}}>Ваш баланс</p>
-            
-            <div className="menu-card" style={{flexDirection:'column', gap:10, padding:20, border:'1px solid #facc15'}}>
-                <div style={{fontSize:'1.2rem', fontWeight:'bold'}}>Ежедневный Бонус</div>
-                <div style={{color:'#9ca3af', fontSize:'0.9rem'}}>Заходите каждый день за наградой!</div>
-                <button 
-                    className="primary-btn" 
-                    onClick={!timeLeft ? claimBonus : undefined} 
-                    disabled={loading || !!timeLeft}
-                    style={{
-                        width:'100%', marginTop:10, 
-                        background: timeLeft ? '#334155' : 'linear-gradient(90deg, #facc15, #eab308)', 
-                        color: timeLeft ? '#94a3b8' : '#000',
-                        border: timeLeft ? '1px solid #475569' : 'none',
-                        cursor: timeLeft ? 'default' : 'pointer'
-                    }}
-                >
-                    {loading ? "Загрузка..." : timeLeft ? `Ждите: ${timeLeft}` : "ЗАБРАТЬ +50 💰"}
-                </button>
-            </div>
-        </div>
-    );
-};
-
-// CLEANED UP: Removed 'highlight' and 'color' props
-const MenuButton = ({title, subtitle, icon, onClick, isTournament}: any) => {
-    const containerClass = isTournament ? "menu-card tournament-card" : "menu-card";
-    return (
-        <div className={containerClass} onClick={onClick}>
+        <div className={containerClass} onClick={handleClick}>
             <span style={{fontSize: '1.8rem'}}>{icon}</span>
             <div style={{flex: 1}}>
                 <div className={isTournament ? "tournament-text" : "menu-title"}>{title}</div>
@@ -307,11 +338,14 @@ const MenuButton = ({title, subtitle, icon, onClick, isTournament}: any) => {
     );
 };
 
-const WipScreen = ({ title, emoji, onBack }: any) => (
-    <div className="animate-fade-in" style={{textAlign:'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height:'100%'}}>
-        <div style={{fontSize: '4rem', marginBottom: 16}}>{emoji}</div>
-        <h2 style={{fontFamily: 'Bounded', marginBottom: 8}}>{title}</h2>
-        <p style={{color:'#9ca3af', fontSize:'0.9rem', marginBottom: 32}}>Раздел в разработке</p>
-        <button className="secondary-btn" onClick={onBack}>НАЗАД</button>
-    </div>
-);
+const WipScreen = ({ title, emoji, onBack }: any) => {
+    const playSound = useSound();
+    return (
+        <div className="animate-fade-in" style={{textAlign:'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height:'100%'}}>
+            <div style={{fontSize: '4rem', marginBottom: 16}}>{emoji}</div>
+            <h2 style={{fontFamily: 'Bounded', marginBottom: 8}}>{title}</h2>
+            <p style={{color:'#9ca3af', fontSize:'0.9rem', marginBottom: 32}}>Раздел в разработке</p>
+            <button className="secondary-btn" onClick={() => { playSound('click_soft'); onBack(); }}>НАЗАД</button>
+        </div>
+    );
+};
