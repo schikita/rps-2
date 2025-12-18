@@ -3,7 +3,7 @@ import type { User } from "../App";
 import { HandFightAnimation } from "../components/HandFightAnimation";
 import { type Move } from "../engine/rps";
 import { API_URL } from "../config";
-import { useSound } from "../sounds/useSound"; // Import sounds
+import { useSound } from "../sounds/useSound"; 
 
 const BOT_AVATAR = "/avatars/skin-6.jpg";
 type Phase = "lobby" | "idle" | "countdown" | "reveal" | "matchOver";
@@ -43,7 +43,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, tok
 
   const timerRef = useRef<number | null>(null);
 
-  const playSound = useSound(); // Initialize sound
+  const playSound = useSound(); 
+
+  // Removed isBonusReady logic from here
 
   const updatePlayerMove = (move: Move | null) => {
     setPlayerMove(move);
@@ -58,7 +60,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, tok
   };
 
   const resetToLobby = () => {
-    playSound('click_main'); // Sound for Lobby button
+    playSound('click_main'); 
     clearTimer();
     setPhase("lobby");
     setCountdown(null);
@@ -71,14 +73,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, tok
   };
 
   const selectBet = (amount: number) => {
-      playSound('click_sharp'); // Sound for bet selection
+      playSound('click_sharp'); 
       setBetAmount(amount);
       setErrorMsg(null);
       setIsBetListOpen(false);
   };
 
   const startArena = async () => {
-    playSound('click_main'); // Sound for Start button
+    playSound('click_main'); 
     if (mode === "bot") {
         setPhase("idle");
         setPlayerWins(0);
@@ -111,7 +113,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, tok
 
   const handleMoveClick = (move: Move) => {
     if (phase === "reveal" || phase === "matchOver") return;
-    playSound('click_sharp'); // Sound for move selection
+    playSound('click_sharp'); 
     updatePlayerMove(move);
     if (phase === "idle") startCountdown();
   };
@@ -143,7 +145,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, tok
             body: JSON.stringify({ playerMove: finalPlayerMove }),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error("Round Error");
+        if (!res.ok) throw new Error("Ошибка раунда");
 
         setBotMove(data.botMove);
         
@@ -182,11 +184,11 @@ export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, tok
         const data = await res.json();
         
         if (!res.ok) {
-            console.error("Finish Error:", data.error);
+            console.error("Ошибка завершения:", data.error);
             return;
         }
         
-        if (isWinner) playSound('success'); // Victory sound
+        if (isWinner) playSound('success'); 
         
         setFinalProfit(isWinner ? (mode === 'bot' ? 15 : betAmount) : -betAmount);
         setMatchResult(isWinner ? "win" : "lose");
@@ -200,23 +202,24 @@ export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, tok
 
   return (
     <div style={{height: '100%', display: 'flex', flexDirection: 'column'}}>
-        {/* Header */}
+        {/* Шапка */}
         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: '0 4px'}}>
             <button onClick={onBack} className="back-btn">← Назад</button>
             <span className="game-header-title" style={{color: mode === 'pvp' ? '#f87171' : '#4ade80'}}>
                 {mode === 'pvp' ? 'ТУРНИР' : 'ТРЕНИРОВКА'}
             </span>
-            {/* Show wallet widget here only in Lobby */}
+            {/* Виджет кошелька показываем в шапке только если мы в лобби (не в игре) */}
             {!isGameActive && (
-                <div className="wallet-widget menu-card" onClick={onOpenWallet} style={{borderColor: themeColor, padding: '8px 12px', borderRadius: '999px', gap: 8, margin: 0}}>
+                <div className="wallet-widget menu-card" onClick={onOpenWallet} style={{borderColor: themeColor, padding: '8px 12px', borderRadius: '999px', gap: 8, margin: 0, position: 'relative'}}>
                     <span className="coin-icon">💰</span>
                     <span style={{color: themeColor, fontWeight:'bold'}}>{balance}</span>
+                    {/* Dot removed from here */}
                 </div>
             )}
-            {isGameActive && <div style={{width: 60}}></div>} {/* Placeholder for centering */}
+            {isGameActive && <div style={{width: 60}}></div>}
         </div>
 
-        {/* Lobby */}
+        {/* Лобби */}
         {phase === "lobby" && (
             <div className="lobby-panel" style={{marginTop: 40}}>
               <div style={{fontSize: '3rem', marginBottom: 10, textAlign:'center'}}>{mode === 'bot' ? '🤖' : '⚔️'}</div>
@@ -251,30 +254,61 @@ export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, tok
             </div>
         )}
 
-        {/* Arena */}
+        {/* Арена */}
         {phase !== "lobby" && (
             <div style={{display: 'flex', flexDirection: 'column', height: '100%'}}>
               
-              {/* 1. OPPONENT HUD (Top) */}
-              <div className="hud-top"> 
-                <img src={BOT.avatar} className="hud-avatar" alt="Bot Avatar" />
-                <div className="hud-info">
-                    <div className="hud-name">{BOT.name}</div>
-                    <div className="hud-score">Счет: {botWins}</div>
-                </div>
-              </div>
-
-              {/* 2. BATTLEFIELD (Center) */}
-              <div style={{flex: 1, position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'center'}}>
-                  <HandFightAnimation phase={phase === "idle" ? "idle" : phase === "matchOver" ? "reveal" : phase} countdown={countdown} playerMove={playerMove} botMove={botMove} />
-                  
-                  {/* Score big display */}
-                  <div style={{textAlign:'center', marginTop: -10, marginBottom: 10, fontSize:'1.5rem', fontWeight:'800', letterSpacing:'2px', zIndex: 10, textShadow: '0 0 10px rgba(0,0,0,0.5)'}}>
-                      <span style={{color: themeColor}}>{playerWins}</span> : <span style={{color: '#f87171'}}>{botWins}</span>
+              {/* 1. ПРОФИЛЬ ПРОТИВНИКА */}
+              <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: '10px 14px',
+                  background: 'rgba(15, 23, 42, 0.6)',
+                  border: '1px solid #f87171', 
+                  borderRadius: '16px',
+                  marginBottom: '10px',
+                  boxShadow: '0 4px 20px rgba(248, 113, 113, 0.2)'
+              }}>
+                  <img src={BOT.avatar} style={{width: 44, height: 44, borderRadius: '50%', border: '2px solid #f87171', objectFit: 'cover'}} alt="Bot" />
+                  <div style={{flex: 1}}>
+                      <div style={{fontWeight: 'bold', fontSize: '0.95rem'}}>{BOT.name}</div>
+                      <div style={{fontSize: '0.75rem', color: '#f87171', opacity: 0.8}}>Уровень 1</div>
+                  </div>
+                  <div style={{textAlign: 'right'}}>
+                      <div style={{fontSize: '0.65rem', color: '#9ca3af', textTransform: 'uppercase', letterSpacing:'0.05em'}}>Победы</div>
+                      <div style={{fontWeight: '800', fontSize: '1.2rem', color: '#fff'}}>{botWins}</div>
                   </div>
               </div>
 
-              {/* 3. CONTROLS (Buttons) */}
+              {/* 2. ПОЛЕ БОЯ */}
+              <div style={{flex: 1, position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'center'}}>
+                  <HandFightAnimation phase={phase === "idle" ? "idle" : phase === "matchOver" ? "reveal" : phase} countdown={countdown} playerMove={playerMove} botMove={botMove} />
+                  
+                  {/* СЧЕТ СПРАВА */}
+                  <div style={{
+                      position: 'absolute',
+                      right: '10px', 
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      zIndex: 10, 
+                      background: 'rgba(0,0,0,0.3)',
+                      padding: '8px',
+                      borderRadius: '12px',
+                      backdropFilter: 'blur(4px)',
+                      border: '1px solid rgba(255,255,255,0.1)'
+                  }}>
+                      <div style={{color: themeColor, fontSize: '0.7rem', textAlign: 'center', marginBottom: 2}}>ВЫ</div>
+                      <div style={{textAlign: 'center', fontWeight: '800', fontSize: '1.5rem', lineHeight: 1}}>
+                        <span style={{color: themeColor}}>{playerWins}</span>
+                        <span style={{color: '#9ca3af', margin: '0 4px', fontSize: '1rem'}}>:</span>
+                        <span style={{color: '#f87171'}}>{botWins}</span>
+                      </div>
+                      <div style={{color: '#f87171', fontSize: '0.7rem', textAlign: 'center', marginTop: 2}}>СОПЕРНИКИ</div>
+                  </div>
+              </div>
+
+              {/* 3. УПРАВЛЕНИЕ */}
               <div className="moves-row" style={{marginBottom: 12}}>
                 {['rock', 'scissors', 'paper'].map((m) => {
                     const isSelected = playerMove === m;
@@ -293,7 +327,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, tok
                 })}
               </div>
 
-              {/* 4. PLAYER PROFILE (Bottom) */}
+              {/* 4. ВАШ ПРОФИЛЬ (Снизу) */}
               <div style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -307,9 +341,25 @@ export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, tok
                   <img src={user.avatar} style={{width: 44, height: 44, borderRadius: '50%', border: `2px solid ${themeColor}`, objectFit: 'cover'}} alt="Me" />
                   <div style={{flex: 1}}>
                       <div style={{fontWeight: 'bold', fontSize: '0.95rem'}}>{user.nickname}</div>
-                      <div style={{fontSize: '0.85rem', color: '#facc15', display:'flex', alignItems:'center', gap:4}}>
+                      
+                      {/* БАЛАНС (Dot removed from here) */}
+                      <div 
+                          onClick={onOpenWallet}
+                          style={{
+                              fontSize: '0.85rem', 
+                              color: '#facc15', 
+                              display:'flex', 
+                              alignItems:'center', 
+                              gap:4, 
+                              cursor: 'pointer',
+                              width: 'fit-content',
+                              position: 'relative' 
+                          }}
+                          title="Нажмите, чтобы открыть кошелек"
+                      >
                           <span>💰</span> {balance}
                       </div>
+
                   </div>
                   <div style={{textAlign: 'right'}}>
                       <div style={{fontSize: '0.65rem', color: '#9ca3af', textTransform: 'uppercase', letterSpacing:'0.05em'}}>Победы</div>
@@ -317,11 +367,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, tok
                   </div>
               </div>
 
-              {phase === "countdown" && <p className="auth-hint" style={{textAlign:'center', color: themeColor, position:'absolute', top:'45%', left:0, right:0, fontSize: '1.2rem', fontWeight:'bold', textShadow:'0 0 10px rgba(0,0,0,0.8)'}}>Таймер: {countdown}с</p>}
             </div>
         )}
 
-        {/* Result Overlay */}
+        {/* Результат */}
         {phase === "matchOver" && (
           <div className="match-overlay">
             <div className="match-card" style={{borderColor: themeColor}}>

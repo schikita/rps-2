@@ -5,9 +5,9 @@ require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 let sequelize;
 
-// LOGICA CONNESSIONE (Docker vs Locale)
+// ЛОГИКА ПОДКЛЮЧЕНИЯ (Docker vs Локально)
 if (process.env.DATABASE_URL) {
-    console.log("🔌 Connessione via DATABASE_URL (Docker)...");
+    console.log("🔌 Подключение через DATABASE_URL (Docker)...");
     sequelize = new Sequelize(process.env.DATABASE_URL, {
         dialect: 'postgres',
         logging: false,
@@ -16,7 +16,7 @@ if (process.env.DATABASE_URL) {
         }
     });
 } else {
-    console.log("💻 Connessione via variabili (Locale)...");
+    console.log("💻 Подключение через переменные (Локально)...");
     sequelize = new Sequelize(
         process.env.DB_NAME || 'rps_game',
         process.env.DB_USER || 'postgres',
@@ -30,14 +30,14 @@ if (process.env.DATABASE_URL) {
     );
 }
 
-// 1. MODELLO USER
+// 1. МОДЕЛЬ ПОЛЬЗОВАТЕЛЯ (User)
 const User = sequelize.define('User', {
     username: { type: DataTypes.STRING, unique: true, allowNull: false },
-    email: { type: DataTypes.STRING, unique: true, allowNull: false, validate: { isEmail: true } }, // Aggiunto Email
+    email: { type: DataTypes.STRING, unique: true, allowNull: false, validate: { isEmail: true } }, 
     password: { type: DataTypes.STRING, allowNull: false },
-    avatar: { type: DataTypes.STRING, defaultValue: "/avatars/skin-1.jpg" }, // Aggiunto Avatar
+    avatar: { type: DataTypes.STRING, defaultValue: "/avatars/skin-1.jpg" },
     
-    // ECONOMIA: Soldi Iniziali 1000
+    // ЭКОНОМИКА: Стартовые деньги 1000
     coins: { type: DataTypes.INTEGER, defaultValue: 1000 }, 
     
     lastLoginDate: { type: DataTypes.DATEONLY },
@@ -47,21 +47,19 @@ const User = sequelize.define('User', {
     equippedBorderId: { type: DataTypes.INTEGER, allowNull: true }
 });
 
-// 2. MODELLO ITEM (Shop)
+// 2. МОДЕЛЬ ПРЕДМЕТА (Item - Магазин)
 const Item = sequelize.define('Item', {
     name: { type: DataTypes.STRING, allowNull: false },
     price: { type: DataTypes.INTEGER, allowNull: false },
-    imageId: { type: DataTypes.STRING, allowNull: false }, // Useremo questo per identificare lo stile (es. 'neon_green')
-    color: { type: DataTypes.STRING, defaultValue: "#ffffff" }, // Colore per il frontend
+    imageId: { type: DataTypes.STRING, allowNull: false }, // Идентификатор стиля (например, 'neon_green')
+    color: { type: DataTypes.STRING, defaultValue: "#ffffff" }, // Цвет для фронтенда
     type: { type: DataTypes.ENUM('avatar', 'border', 'effect'), allowNull: false },
 });
 
-// 3. USER_ITEMS (Inventario)
-const UserItem = sequelize.define('UserItem', {
-    // ID automatico
-});
+// 3. СВЯЗЬ ПОЛЬЗОВАТЕЛЬ-ПРЕДМЕТЫ (Инвентарь)
+const UserItems = sequelize.define('UserItems', {});
 
-User.belongsToMany(Item, { through: UserItem });
-Item.belongsToMany(User, { through: UserItem });
+User.belongsToMany(Item, { through: UserItems });
+Item.belongsToMany(User, { through: UserItems });
 
-module.exports = { sequelize, User, Item, UserItem };
+module.exports = { sequelize, User, Item };

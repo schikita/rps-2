@@ -13,11 +13,11 @@ app.use(cors());
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret";
 const PORT = process.env.PORT || 3000;
 
-// MIDDLEWARE
+// MIDDLEWARE (ПРОВЕРКА ТОКЕНА)
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers["authorization"];
     const token = authHeader && authHeader.split(" ")[1];
-    if (!token) return res.status(401).json({ error: "Access denied." });
+    if (!token) return res.status(401).json({ error: "Доступ запрещен." });
 
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
@@ -25,17 +25,17 @@ const authenticateToken = (req, res, next) => {
         req.userId = decoded.id;
         next();
     } catch (e) {
-        res.status(403).json({ error: "Invalid token." });
+        res.status(403).json({ error: "Неверный токен." });
     }
 };
 
 app.get("/health", (req, res) => res.json({ ok: true }));
 
-// AUTH: REGISTER (Corretto per salvare Avatar e Email)
+// АВТОРИЗАЦИЯ: РЕГИСТРАЦИЯ
 app.post("/auth/register", async (req, res) => {
     try {
         const { nickname, email, password, avatar } = req.body;
-        if (!nickname || !email || !password) return res.status(400).json({ error: "Missing fields" });
+        if (!nickname || !email || !password) return res.status(400).json({ error: "Заполните все поля" });
         
         const hash = await bcrypt.hash(password, 10);
         
@@ -50,39 +50,39 @@ app.post("/auth/register", async (req, res) => {
         res.json({ token, user: newUser });
     } catch (e) {
         console.error(e);
-        res.status(400).json({ error: "User already exists" });
+        res.status(400).json({ error: "Пользователь уже существует" });
     }
 });
 
-// AUTH: LOGIN
+// АВТОРИЗАЦИЯ: ВХОД
 app.post("/auth/login", async (req, res) => {
     try {
         const { nickname, password } = req.body;
         const user = await User.findOne({ where: { username: nickname } });
         
         if (!user || !(await bcrypt.compare(password, user.password))) {
-            return res.status(400).json({ error: "Invalid credentials" });
+            return res.status(400).json({ error: "Неверные учетные данные" });
         }
         
         const token = jwt.sign({ id: user.id }, JWT_SECRET);
         res.json({ token, user });
     } catch (e) {
-        res.status(500).json({ error: "Server error" });
+        res.status(500).json({ error: "Ошибка сервера" });
     }
 });
 
-// GET USER
+// ПОЛУЧЕНИЕ ДАННЫХ ПОЛЬЗОВАТЕЛЯ
 app.get("/api/user", authenticateToken, async (req, res) => {
     try {
         const user = await User.findByPk(req.userId, {
             include: { model: Item, through: { attributes: [] } }
         });
-        if (!user) return res.status(404).json({ error: "User not found" });
+        if (!user) return res.status(404).json({ error: "Пользователь не найден" });
         res.json({ user });
-    } catch (e) { res.status(500).json({ error: "Server error" }); }
+    } catch (e) { res.status(500).json({ error: "Ошибка сервера" }); }
 });
 
-// DAILY BONUS
+// ЕЖЕДНЕВНЫЙ БОНУС
 const DAILY_REWARDS = [50, 100, 150, 200, 250, 300, 1000];
 
 app.post('/api/daily-bonus', authenticateToken, async (req, res) => {
@@ -90,7 +90,6 @@ app.post('/api/daily-bonus', authenticateToken, async (req, res) => {
         const user = await User.findByPk(req.userId);
         const today = new Date().toISOString().split('T')[0];
 
-        // 1. Проверка: уже забрал сегодня?
         if (user.lastLoginDate === today) {
             return res.json({ 
                 success: false, 
@@ -102,79 +101,86 @@ app.post('/api/daily-bonus', authenticateToken, async (req, res) => {
 
         const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
         
-        // 2. Обновляем серию (Streak)
         if (user.lastLoginDate === yesterday) {
             user.loginStreak += 1;
         } else {
-            user.loginStreak = 1; // Сброс на День 1, если пропустил
+            user.loginStreak = 1; 
         }
 
-        // 3. Выбираем награду из массива
-        // (streak - 1) потому что массив начинается с 0
-        // % 7 обеспечивает цикл (после 7-го дня снова 1-й)
         const rewardIndex = (user.loginStreak - 1) % 7;
         const reward = DAILY_REWARDS[rewardIndex];
 
-        // 4. Начисляем
         user.coins += reward;
         user.lastLoginDate = today;
         await user.save();
 
         res.json({ 
             success: true, 
-            reward, // Теперь здесь будет 50 для первого дня
+            reward, 
             coins: user.coins, 
             streak: user.loginStreak
         });
     } catch (e) {
         console.error(e);
-        res.status(500).json({ error: "Server Error" });
+        res.status(500).json({ error: "Ошибка сервера" });
     }
 });
 
-// SHOP ROUTES
+// МАГАЗИН: СПИСОК ТОВАРОВ
 app.get('/api/shop', async (req, res) => {
     try {
         const items = await Item.findAll({ attributes: { exclude: ['createdAt', 'updatedAt'] } });
         res.json(items);
-    } catch (e) { res.status(500).json({ error: "Server Error" }); }
+    } catch (e) { res.status(500).json({ error: "Ошибка сервера" }); }
 });
 
+// МАГАЗИН: ПОКУПКА
 app.post('/api/buy', authenticateToken, async (req, res) => {
     const { itemId } = req.body;
     try {
         const user = await User.findByPk(req.userId);
         const item = await Item.findByPk(itemId);
 
-        if (!item) return res.status(404).json({ error: "Item not found" });
+        if (!item) return res.status(404).json({ error: "Предмет не найден" });
 
         const hasItem = await user.hasItem(item);
-        if (hasItem) return res.status(400).json({ error: "Già posseduto" });
+        if (hasItem) return res.status(400).json({ error: "Уже куплено" });
 
-        if (user.coins < item.price) return res.status(400).json({ error: "Monete insufficienti" });
+        if (user.coins < item.price) return res.status(400).json({ error: "Недостаточно монет" });
 
         user.coins -= item.price;
         await user.save();
         await user.addItem(item);
 
-        res.json({ success: true, coins: user.coins, message: `Acquistato ${item.name}!` });
+        res.json({ success: true, coins: user.coins, message: `Куплено: ${item.name}!` });
     } catch (e) {
-        res.status(500).json({ error: "Server error" });
+        res.status(500).json({ error: "Ошибка сервера" });
     }
 });
 
-// BATTLE ROUTES
+// БИТВА: СТАВКА (ИСПРАВЛЕНО: добавлена проверка user)
 app.post("/api/bet/start", authenticateToken, async (req, res) => {
     const { betAmount } = req.body;
     try {
         const user = await User.findByPk(req.userId);
-        if (user.coins < betAmount) return res.status(400).json({ error: "No money" });
+        
+        // ВАЖНО: Проверка наличия пользователя
+        if (!user) {
+            return res.status(404).json({ error: "Пользователь не найден. Перезайдите." });
+        }
+
+        if (user.coins < betAmount) return res.status(400).json({ error: "Недостаточно средств" });
+        
         user.coins -= betAmount;
         await user.save();
         res.json({ success: true, new_balance: user.coins });
-    } catch (e) { res.status(500).json({ error: "Server error" }); }
+    } catch (e) { 
+        console.error("Ошибка ставки:", e);
+        res.status(500).json({ error: "Ошибка сервера" }); 
+    }
 });
 
+// БИТВА: РАУНД
 app.post("/api/match/round", authenticateToken, async (req, res) => {
     const { playerMove } = req.body;
     const MOVES = ['rock', 'scissors', 'paper'];
@@ -191,10 +197,13 @@ app.post("/api/match/round", authenticateToken, async (req, res) => {
     res.json({ success: true, botMove, result });
 });
 
+// БИТВА: ЗАВЕРШЕНИЕ
 app.post("/api/match/end", authenticateToken, async (req, res) => {
     const { mode, isWinner, betAmount } = req.body;
     try {
         const user = await User.findByPk(req.userId);
+        if (!user) return res.status(404).json({ error: "Пользователь не найден" });
+
         let profit = 0;
         if (isWinner) {
             profit = (mode === "bot") ? 15 : (betAmount * 2);
@@ -202,31 +211,29 @@ app.post("/api/match/end", authenticateToken, async (req, res) => {
             await user.save();
         }
         res.json({ success: true, points_change: profit, new_balance: user.coins });
-    } catch (e) { res.status(500).json({ error: "Server error" }); }
+    } catch (e) { res.status(500).json({ error: "Ошибка сервера" }); }
 });
 
-
-
-// POPOLAMENTO SHOP (Match col Frontend)
+// НАПОЛНЕНИЕ МАГАЗИНА (SEED)
 async function seedShop() {
     try {
         const count = await Item.count();
         if (count === 0) {
-            console.log("🛒 Creazione Negozio...");
+            console.log("🛒 Создание Магазина...");
             await Item.bulkCreate([
-                // Avatars/Effects sincronizzati con il frontend
                 { name: "Кислота (Acid)", price: 500, type: "border", imageId: "neon_green", color: "#22c55e" },
                 { name: "Магнат (Gold)", price: 2000, type: "border", imageId: "gold_rush", color: "#facc15" },
                 { name: "Киберпанк (Cyber)", price: 5000, type: "border", imageId: "cyber_punk", color: "#ec4899" }
             ]);
-            console.log("✅ Negozio Pronto!");
+            console.log("✅ Магазин Готов!");
         }
-    } catch (e) { console.error("Shop seed error", e); }
+    } catch (e) { console.error("Ошибка создания магазина", e); }
 }
 
 async function startServer() {
-    await sequelize.sync({ force: true });
+    // ВАЖНО: alter: true обновляет структуру, НЕ удаляя данные
+    await sequelize.sync({ alter: true });
     await seedShop();
-    app.listen(PORT, () => console.log(`🚀 Server on port ${PORT}`));
+    app.listen(PORT, () => console.log(`🚀 Сервер запущен на порту ${PORT}`));
 }
 startServer();

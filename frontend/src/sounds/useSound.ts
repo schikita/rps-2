@@ -13,7 +13,7 @@ export const useSound = () => {
   const play = useCallback((type: keyof typeof SOUND_PATHS) => {
     try {
       const audio = new Audio(SOUND_PATHS[type]);
-      audio.volume = 0.5; // Громкость 50%
+      audio.volume = 0.03; // Громкость 50%
       audio.play().catch((e) => console.warn("Audio play error:", e));
     } catch (e) {
       console.warn("Audio error:", e);

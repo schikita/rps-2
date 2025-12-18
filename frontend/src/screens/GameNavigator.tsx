@@ -4,7 +4,7 @@ import { GameScreen } from "./GameScreen";
 import { DailyBonusScreen } from "./DailyBonusScreen";
 import { API_URL } from "../config";
 import { CustomModal } from "../components/CustomModal";
-import { useSound } from "../sounds/useSound"; // Import sounds
+import { useSound } from "../sounds/useSound"; 
 
 type Screen = "menu" | "game" | "shop" | "tournament" | "profile" | "wallet" | "daily";
 type NavContext = "menu" | "game"; 
@@ -27,7 +27,7 @@ interface GameNavigatorProps {
 }
 
 export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, token, refreshUser }) => {
-  const playSound = useSound(); // Initialize sound hook
+  const playSound = useSound(); 
   
   const userStorageKey = `rps_save_${user.nickname}`;
   const balance = user.points; 
@@ -44,7 +44,7 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
   };
 
   const closeModal = () => {
-    playSound('click_soft'); // Sound on close
+    playSound('click_soft'); 
     setModal(prev => ({ ...prev, isOpen: false }));
   };
 
@@ -64,7 +64,7 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
     fetch(`${API_URL}/api/shop`)
         .then(res => res.json())
         .then(data => setShopItems(data))
-        .catch(err => console.error("Shop load error", err));
+        .catch(err => console.error("Ошибка загрузки магазина", err));
   }, []);
 
   useEffect(() => {
@@ -79,7 +79,7 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
             return;
         }
         
-        playSound('click_soft'); // Sound on back/escape
+        playSound('click_soft'); 
 
         if (screen === "menu") return;
         
@@ -96,7 +96,7 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
   }, [screen, returnScreen, modal.isOpen]);
 
   const handleBuy = async (item: Skin) => {
-    playSound('click_sharp'); // Click sound
+    playSound('click_sharp'); 
     try {
       const res = await fetch(`${API_URL}/api/buy`, {
         method: "POST",
@@ -108,7 +108,7 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
           showModal("Ошибка", data.error || "Не удалось купить", "error"); 
           return; 
       }
-      playSound('success'); // Success sound
+      playSound('success'); 
       await refreshUser();
       showModal("Успех!", `Вы купили ${item.name}!`, "success");
     } catch (error) { 
@@ -117,7 +117,7 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
   };
 
   const startGame = (mode: "bot" | "pvp") => {
-    playSound('click_main'); // Start game sound
+    playSound('click_main'); 
     setGameMode(mode);
     setNavContext("game");
     setScreen("game");
@@ -130,7 +130,7 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
   };
 
   const goToAuxiliaryScreen = (target: Screen) => {
-      playSound('click_soft'); // Navigation sound
+      playSound('click_soft'); 
       if (screen === "menu" || screen === "game") {
           setReturnScreen(screen);
       }
@@ -138,12 +138,12 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
   };
 
   const handleBack = () => {
-      playSound('click_soft'); // Back sound
+      playSound('click_soft'); 
       setScreen(returnScreen);
   };
 
   const handleEquip = (id: number) => {
-      playSound('click_sharp'); // Equip sound
+      playSound('click_sharp'); 
       setEquippedSkinId(id);
   };
 
