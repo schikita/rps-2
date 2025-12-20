@@ -18,6 +18,7 @@ interface HandFightAnimationProps {
   countdown: number | null;
   playerMove: Move | null;
   botMove: Move | null;
+  lastRoundResult: "win" | "lose" | "draw" | null;
 }
 
 const getPlayerSprite = (phase: Phase, move: Move | null) => {
@@ -53,6 +54,7 @@ export const HandFightAnimation: React.FC<HandFightAnimationProps> = ({
   countdown,
   playerMove,
   botMove,
+  lastRoundResult,
 }) => {
   const playerSprite = getPlayerSprite(phase, playerMove);
   const botSprite = getBotSprite(phase, botMove);
@@ -68,10 +70,18 @@ export const HandFightAnimation: React.FC<HandFightAnimationProps> = ({
         <img src={botSprite} alt="Рука бота" className="hand-image hand-image--bot" />
       </div>
 
-      {/* обратный отсчёт по центру */}
-      {countdown !== null && phase === "countdown" && (
-        <div className="hands-countdown">{countdown}</div>
-      )}
+      {/* обратный отсчёт или результат по центру */}
+      <div className="hands-center-info">
+        {countdown !== null && phase === "countdown" && (
+          <div className="hands-countdown animate-pulse">{countdown}</div>
+        )}
+
+        {phase === "reveal" && lastRoundResult && (
+          <div className={`round-result-text ${lastRoundResult} animate-bounce-in`}>
+            {lastRoundResult === "win" ? "ПОБЕДА" : lastRoundResult === "lose" ? "ПРОИГРЫШ" : "НИЧЬЯ"}
+          </div>
+        )}
+      </div>
 
       {/* рука игрока снизу */}
       <div

@@ -11,7 +11,11 @@ export type User = {
   points: number;
   inventory: number[];
   last_claim_date?: string;
-  streak: number; // NUOVO CAMPO
+  streak: number;
+  equippedBorderId: number | null;
+  wins: number;
+  losses: number;
+  total_earned: number;
 };
 
 const STORAGE_KEY_USER = "cyber-rps-user";
@@ -24,16 +28,20 @@ const App: React.FC = () => {
 
   const mapBackendUserToFrontend = (data: any): User => {
     const inv: number[] = data.Items ? data.Items.map((i: any) => i.id) : [];
-    
+
     return {
-        id: data.id,
-        nickname: data.username || data.nickname,
-        email: data.email,
-        avatar: data.avatar || "/avatars/skin-1.jpg",
-        points: data.coins !== undefined ? data.coins : 1000, 
-        inventory: inv,
-        last_claim_date: data.lastLoginDate || data.last_claim_date,
-        streak: data.loginStreak || 0 // Mappiamo lo streak dal DB
+      id: data.id,
+      nickname: data.username || data.nickname,
+      email: data.email,
+      avatar: data.avatar || "/avatars/skin-1.jpg",
+      points: data.coins !== undefined ? data.coins : 1000,
+      inventory: inv,
+      last_claim_date: data.lastLoginDate || data.last_claim_date,
+      streak: data.loginStreak || 0, // Mappiamo lo streak dal DB
+      equippedBorderId: data.equippedBorderId || null,
+      wins: data.wins || 0,
+      losses: data.losses || 0,
+      total_earned: data.total_earned || 0
     };
   };
 
@@ -42,30 +50,30 @@ const App: React.FC = () => {
     if (!token) return;
 
     try {
-        const res = await fetch(`${API_URL}/api/user`, {
-            headers: { "Authorization": `Bearer ${token}` }
-        });
+      const res = await fetch(`${API_URL}/api/user`, {
+        headers: { "Authorization": `Bearer ${token}` }
+      });
 
-        if (!res.ok) {
-            if (res.status === 403 || res.status === 401) logout();
-            return;
-        }
+      if (!res.ok) {
+        if (res.status === 403 || res.status === 401) logout();
+        return;
+      }
 
-        const data = await res.json();
-        const updatedUser = mapBackendUserToFrontend(data.user);
-        
-        localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(updatedUser));
-        setUser(updatedUser);
+      const data = await res.json();
+      const updatedUser = mapBackendUserToFrontend(data.user);
+
+      localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(updatedUser));
+      setUser(updatedUser);
 
     } catch (error) {
-        console.error("Error refreshing user:", error);
+      console.error("Error refreshing user:", error);
     }
   };
 
   useEffect(() => {
     const rawUser = localStorage.getItem(STORAGE_KEY_USER);
     const token = getToken();
-    
+
     if (rawUser && token) {
       setUser(JSON.parse(rawUser));
       refreshUser();
@@ -89,10 +97,10 @@ const App: React.FC = () => {
     return <AuthScreen onLoginSuccess={handleLoginSuccess} />;
   }
 
-  return <GameNavigator 
-    user={user} 
-    onLogout={logout} 
-    token={getToken()!} 
+  return <GameNavigator
+    user={user}
+    onLogout={logout}
+    token={getToken()!}
     refreshUser={refreshUser}
   />;
 };

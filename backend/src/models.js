@@ -33,18 +33,23 @@ if (process.env.DATABASE_URL) {
 // 1. МОДЕЛЬ ПОЛЬЗОВАТЕЛЯ (User)
 const User = sequelize.define('User', {
     username: { type: DataTypes.STRING, unique: true, allowNull: false },
-    email: { type: DataTypes.STRING, unique: true, allowNull: false, validate: { isEmail: true } }, 
+    email: { type: DataTypes.STRING, unique: true, allowNull: false, validate: { isEmail: true } },
     password: { type: DataTypes.STRING, allowNull: false },
     avatar: { type: DataTypes.STRING, defaultValue: "/avatars/skin-1.jpg" },
-    
+
     // ЭКОНОМИКА: Стартовые деньги 1000
-    coins: { type: DataTypes.INTEGER, defaultValue: 1000 }, 
-    
+    coins: { type: DataTypes.INTEGER, defaultValue: 1000 },
+
     lastLoginDate: { type: DataTypes.DATEONLY },
     loginStreak: { type: DataTypes.INTEGER, defaultValue: 0 },
-    
+
     equippedAvatarId: { type: DataTypes.INTEGER, allowNull: true },
-    equippedBorderId: { type: DataTypes.INTEGER, allowNull: true }
+    equippedBorderId: { type: DataTypes.INTEGER, allowNull: true },
+
+    // СТАТИСТИКА
+    wins: { type: DataTypes.INTEGER, defaultValue: 0 },
+    losses: { type: DataTypes.INTEGER, defaultValue: 0 },
+    total_earned: { type: DataTypes.INTEGER, defaultValue: 0 }
 });
 
 // 2. МОДЕЛЬ ПРЕДМЕТА (Item - Магазин)

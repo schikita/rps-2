@@ -34,50 +34,50 @@ export const CustomModal: React.FC<CustomModalProps> = ({ isOpen, title, message
 
   return (
     <div className="match-overlay" style={{ zIndex: 9999 }}>
-      <div 
-        className="match-card" 
-        style={{ 
-            maxWidth: '340px', 
-            width: '90%',
-            padding: '24px', 
-            borderColor: titleColor,
-            boxShadow: `0 0 40px ${glowColor}, 0 0 0 1px rgba(255,255,255,0.1)`
+      <div
+        className="match-card"
+        style={{
+          maxWidth: '340px',
+          width: '90%',
+          padding: '24px',
+          borderColor: titleColor,
+          boxShadow: `0 0 40px ${glowColor}, 0 0 0 1px rgba(255,255,255,0.1)`
         }}
       >
-        <h2 
-            className="match-title" 
-            style={{ 
-                color: titleColor, 
-                marginBottom: '16px',
-                fontSize: '1.4rem',
-                textShadow: `0 0 15px ${titleColor}`
-            }}
+        <h2
+          className="match-title"
+          style={{
+            color: titleColor,
+            marginBottom: '16px',
+            fontSize: '1.4rem',
+            textShadow: `0 0 15px ${titleColor}`
+          }}
         >
           {title}
         </h2>
-        
-        <p style={{ 
-            color: '#cbd5e1', 
-            marginBottom: '24px', 
-            lineHeight: '1.5', 
-            fontSize: '0.95rem' 
+
+        <p style={{
+          color: '#cbd5e1',
+          marginBottom: '24px',
+          lineHeight: '1.5',
+          fontSize: '0.95rem'
         }}>
           {message}
         </p>
-        
-        <button 
-            className="primary-btn" 
-            onClick={onClose}
-            style={{ 
-                width: '100%', 
-                fontSize: '1rem', 
-                padding: '12px',
-                background: `linear-gradient(90deg, ${titleColor}20, transparent)`,
-                borderColor: titleColor,
-                color: '#fff'
-            }}
+
+        <button
+          className="primary-btn"
+          onClick={onClose}
+          style={{
+            width: '100%',
+            fontSize: '1rem',
+            padding: '12px',
+            background: `linear-gradient(90deg, ${titleColor}20, transparent)`,
+            borderColor: titleColor,
+            color: '#fff'
+          }}
         >
-          OK
+          ХОРОШО
         </button>
       </div>
     </div>
