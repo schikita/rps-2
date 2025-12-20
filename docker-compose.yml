@@ -7,18 +7,21 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: rps
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      # FIX 1: Hardcode password to match the backend's connection string
+      POSTGRES_PASSWORD: rps123 
       POSTGRES_DB: rps_game
     volumes:
       - ./pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      # FIX 2: Change host port to 5434 to avoid conflict with local DB (5432)
+      - "5434:5432"
 
   backend:
     build: ./backend
     container_name: rps_backend
     restart: unless-stopped
     environment:
+      # This matches the user/pass/db defined above
       DATABASE_URL: postgres://rps:rps123@db:5432/rps_game
       JWT_SECRET: super_secret_change_me
     ports:
