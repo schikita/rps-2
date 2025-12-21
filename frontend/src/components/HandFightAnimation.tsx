@@ -1,4 +1,5 @@
 import React from "react";
+import { createPortal } from "react-dom";
 import type { Move } from "../engine/rps";
 
 import playerReady from "../assets/hands/player/player_ready.png";
@@ -19,7 +20,10 @@ interface HandFightAnimationProps {
   playerMove: Move | null;
   botMove: Move | null;
   lastRoundResult: "win" | "lose" | "draw" | null;
+  showResultOverlay?: boolean; // New prop to control visibility
 }
+
+// ... internal functions ...
 
 const getPlayerSprite = (phase: Phase, move: Move | null) => {
   if (phase !== "reveal" || !move) return playerReady;
@@ -55,6 +59,7 @@ export const HandFightAnimation: React.FC<HandFightAnimationProps> = ({
   playerMove,
   botMove,
   lastRoundResult,
+  showResultOverlay = true, // Default to true
 }) => {
   const playerSprite = getPlayerSprite(phase, playerMove);
   const botSprite = getBotSprite(phase, botMove);
@@ -70,18 +75,28 @@ export const HandFightAnimation: React.FC<HandFightAnimationProps> = ({
         <img src={botSprite} alt="Рука бота" className="hand-image hand-image--bot" />
       </div>
 
-      {/* обратный отсчёт или результат по центру */}
-      <div className="hands-center-info">
-        {countdown !== null && phase === "countdown" && (
-          <div className="hands-countdown animate-pulse">{countdown}</div>
-        )}
+      {/* обратный отсчёт (PORTAL TO SCREEN CENTER) */}
+      {countdown !== null && phase === "countdown" && createPortal(
+        <div className="hands-countdown">
+          <span className="animate-pulse" style={{ display: 'inline-block' }}>{countdown}</span>
+        </div>,
+        document.body
+      )}
 
-        {phase === "reveal" && lastRoundResult && (
+      {/* результат по центру (внутри контейнера) */}
+      <div className="hands-center-info">
+        {/* Local content removed, moved to Portal */}
+      </div>
+
+      {/* GLOBAL RESULT OVERLAY */}
+      {phase === "reveal" && lastRoundResult && showResultOverlay && createPortal(
+        <div className="result-overlay">
           <div className={`round-result-text ${lastRoundResult} animate-bounce-in`}>
             {lastRoundResult === "win" ? "ПОБЕДА" : lastRoundResult === "lose" ? "ПРОИГРЫШ" : "НИЧЬЯ"}
           </div>
-        )}
-      </div>
+        </div>,
+        document.body
+      )}
 
       {/* рука игрока снизу */}
       <div

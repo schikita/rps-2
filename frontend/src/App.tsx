@@ -2,8 +2,10 @@ import React, { useEffect, useState } from "react";
 import { AuthScreen } from "./screens/AuthScreen";
 import { GameNavigator } from "./screens/GameNavigator";
 import { API_URL } from "./config";
+import Preloader from "./components/Preloader";
 
 export type User = {
+  // ... existing types
   id: string;
   nickname: string;
   email: string;
@@ -25,8 +27,10 @@ const getToken = () => localStorage.getItem(STORAGE_KEY_TOKEN);
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
+  const [showPreloader, setShowPreloader] = useState(true);
 
   const mapBackendUserToFrontend = (data: any): User => {
+    // ... existing mapping
     const inv: number[] = data.Items ? data.Items.map((i: any) => i.id) : [];
 
     return {
@@ -92,6 +96,10 @@ const App: React.FC = () => {
     localStorage.removeItem(STORAGE_KEY_USER);
     localStorage.removeItem(STORAGE_KEY_TOKEN);
   };
+
+  if (showPreloader) {
+    return <Preloader onFinish={() => setShowPreloader(false)} />;
+  }
 
   if (!user) {
     return <AuthScreen onLoginSuccess={handleLoginSuccess} />;

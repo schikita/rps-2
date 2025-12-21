@@ -99,6 +99,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
               onChange={e => setNickname(e.target.value)}
               className="auth-input"
               placeholder="Твой никнейм"
+              maxLength={12}
               required
             />
           </label>

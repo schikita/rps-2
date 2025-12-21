@@ -10,12 +10,19 @@
   --radius-lg: 24px;
   --radius-pill: 999px;
   --shadow-soft: 0 18px 45px rgba(15, 23, 42, 0.85);
+
+  /* Safe Area Variables */
+  --sat: env(safe-area-inset-top);
+  --sar: env(safe-area-inset-right);
+  --sab: env(safe-area-inset-bottom);
+  --sal: env(safe-area-inset-left);
 }
 
 *,
 *::before,
 *::after {
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html,
@@ -24,23 +31,30 @@ body,
   margin: 0;
   padding: 0;
   height: 100%;
+  width: 100%;
+  /* Fix for mobile browser bars */
+  height: -webkit-fill-available;
 }
 
 body {
   font-family: 'Bounded', system-ui, sans-serif;
   background: radial-gradient(circle at 0% 0%, #0f172a 0, #020617 45%, #020617 100%);
   color: var(--text-main);
+  overflow: hidden;
+  /* Prevent body scrolling */
 }
 
 /* === APP LAYOUT === */
 .app-root {
   min-height: 100vh;
+  min-height: 100dvh;
+  /* Dynamic Dynamic Viewport Height */
   width: 100%;
   display: flex;
   justify-content: center;
   align-items: stretch;
   position: relative;
-  overflow: hidden;
+  overflow-x: hidden;
 }
 
 .app-gradient-bg {
@@ -60,10 +74,36 @@ body {
   width: 100%;
   max-width: 448px;
   /* Matches Game Arena Width */
-  padding: 18px 16px 28px;
+
+  /* Adaptive Padding with Safe Areas */
+  padding-top: calc(18px + var(--sat, 0px));
+  padding-bottom: calc(28px + var(--sab, 0px));
+  padding-left: calc(16px + var(--sal, 0px));
+  padding-right: calc(16px + var(--sar, 0px));
+
   margin: 0 auto;
   display: flex;
   flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.app-content::-webkit-scrollbar {
+  display: none;
+}
+
+@media (max-width: 400px) {
+  .app-content {
+    padding-top: calc(12px + var(--sat, 0px));
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .logo-title {
+    font-size: 1.1rem;
+  }
 }
 
 /* === HEADER & LOGO === */
@@ -130,7 +170,8 @@ body {
   padding: 14px 16px;
   background: rgba(15, 23, 42, 0.6);
   color: var(--text-main);
-  font-size: 1rem;
+  font-size: 16px;
+  /* 16px prevents iOS zoom */
   outline: none;
   transition: all 0.2s ease;
 }
@@ -436,6 +477,10 @@ button,
 .menu-title {
   font-weight: 700;
   font-size: 1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 /* === TOURNAMENT SPECIAL === */
@@ -593,24 +638,20 @@ button,
   position: relative;
   width: 100%;
   max-width: 448px;
-  /* Fixed Width */
-  height: 300px;
+  /* Flexible height for small screens */
+  flex: 1;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
   margin: 10px auto;
 }
 
+/* Hand positioning */
 .hand {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-/* Restored Positions */
-.hand--bot {
-  top: 0;
-}
-
-.hand--player {
-  bottom: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
 }
 
 .hand-image {
@@ -633,13 +674,33 @@ button,
 }
 
 .hands-countdown {
-  font-size: 6rem;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 9999;
+  pointer-events: none;
+
+  /* Explicit layout box for perfect centering */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 120px;
+  height: 120px;
+
+  /* Typography */
+  font-size: 3rem;
   font-weight: 900;
   color: #38bdf8;
   text-shadow: 0 0 30px rgba(56, 189, 248, 0.8);
-  margin: 0;
   line-height: 1;
+  /* Reset line-height */
+  white-space: nowrap;
+
+  /* Visual correction: some fonts sit high */
+  padding-bottom: 0.1em;
 }
+
 
 .hands-center-info {
   position: absolute;
@@ -654,13 +715,43 @@ button,
   pointer-events: none;
 }
 
+/* Result Overlay */
+.result-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  /* Highest priority */
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  /* Let clicks pass through if needed, or set to auto to block */
+  backdrop-filter: blur(2px);
+}
+
 .round-result-text {
   font-family: 'Bounded', sans-serif;
-  font-size: 2.5rem;
+  font-size: 5rem;
   font-weight: 900;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  text-shadow: 0 0 30px currentColor;
+  text-shadow: 0 0 40px currentColor, 0 0 10px rgba(0, 0, 0, 0.8);
+  /* Animation handled by animate-bounce-in */
+  text-align: center;
+  padding: 0 20px;
+}
+
+@media (max-width: 480px) {
+  .round-result-text {
+    font-size: 3rem;
+  }
+}
+
+@media (max-width: 350px) {
+  .round-result-text {
+    font-size: 2.5rem;
+  }
 }
 
 .round-result-text.win {
@@ -758,22 +849,30 @@ button,
   transition: all 0.2s ease;
 }
 
-/* Hover (only if not disabled) */
-.game-btn:not(:disabled):hover {
-  border-color: #fff;
-  background: rgba(255, 255, 255, 0.1);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(255, 255, 255, 0.1);
+/* Hover (only if not disabled) - mainly for desktop */
+@media (hover: hover) {
+  .game-btn:not(:disabled):hover {
+    border-color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(255, 255, 255, 0.1);
+  }
 }
 
-/* Selected State */
+/* Selected State - works for both click and touch */
 .game-btn.selected {
-  background: var(--theme-color, #22d3ee);
-  border-color: var(--theme-color, #22d3ee);
-  color: #0b1120;
-  box-shadow: 0 0 20px var(--theme-color, #22d3ee);
+  background: var(--theme-color, #22d3ee) !important;
+  border-color: var(--theme-color, #22d3ee) !important;
+  color: #0b1120 !important;
+  box-shadow: 0 0 20px var(--theme-color, #22d3ee) !important;
   transform: scale(1.05);
   opacity: 1 !important;
+}
+
+/* Active State - Immediate touch feedback */
+.game-btn:active {
+  transform: scale(0.95);
+  background: rgba(255, 255, 255, 0.2);
 }
 
 /* Dimmed (Disabled during game) */
@@ -829,6 +928,29 @@ button,
   border-radius: 12px;
 }
 
+.score-panel {
+  position: fixed;
+  /* Fixed to viewport */
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 50;
+  /* Above game elements but below modals */
+  background: rgba(0, 0, 0, 0.3);
+  padding: 8px;
+  border-radius: 12px;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+@media (max-width: 380px) {
+  .score-panel {
+    right: 4px;
+    padding: 4px;
+    transform: translateY(-50%) scale(0.9);
+  }
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -851,70 +973,7 @@ button,
   }
 }
 
-/* === MENU FOOTER & EXTRAS === */
-.menu-footer {
-  margin-top: auto;
-  padding: 30px 0 10px;
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 12px;
-}
 
-.btn-action-shop {
-  border: none;
-  border-radius: 20px;
-  background: linear-gradient(135deg, #8b5cf6 0%, #ec4899 100%);
-  color: #fff;
-  font-size: 1rem;
-  font-weight: 700;
-  padding: 14px 20px;
-  cursor: pointer;
-  box-shadow: 0 10px 25px rgba(236, 72, 153, 0.4);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.btn-action-shop:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 15px 35px rgba(236, 72, 153, 0.6);
-  filter: brightness(1.1);
-  border: 1px solid #fff;
-}
-
-.btn-action-shop:active {
-  transform: translateY(1px) scale(0.98);
-}
-
-.btn-action-exit {
-  border: 1px solid rgba(248, 113, 113, 0.3);
-  border-radius: 20px;
-  background: rgba(239, 68, 68, 0.1);
-  color: #fca5a5;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.btn-action-exit:hover {
-  background: rgba(239, 68, 68, 0.2);
-  border-color: rgba(248, 113, 113, 0.6);
-  color: #fff;
-  transform: translateY(-2px);
-}
-
-.btn-action-exit:active {
-  transform: translateY(1px) scale(0.98);
-}
 
 .error-msg {
   color: #f87171;
@@ -930,6 +989,16 @@ button,
   gap: 12px;
   padding: 10px;
   flex: 1;
+}
+
+@media (max-width: 380px) {
+  .bonus-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .bonus-card.big-reward {
+    grid-column: 1 / span 2 !important;
+  }
 }
 
 .bonus-card {
@@ -1040,4 +1109,287 @@ button,
   border: 2px solid #0f172a;
   z-index: 100;
   animation: pulse-dot 2s infinite;
+}
+
+/* === MOBILE OPTIMIZATIONS === */
+@media (max-width: 480px) {
+  .logo-title {
+    font-size: 1.8rem !important;
+    margin-top: 4px;
+  }
+
+  .logo-subtitle {
+    font-size: 0.6rem !important;
+    margin-bottom: 20px !important;
+  }
+
+  .menu-card {
+    padding: 12px !important;
+    gap: 10px !important;
+  }
+
+  .menu-title {
+    font-size: 0.9rem !important;
+  }
+
+  .tournament-text {
+    font-size: 1rem !important;
+  }
+
+  .avatar-option {
+    width: 65px !important;
+    height: 65px !important;
+  }
+
+  .primary-btn {
+    padding: 12px 16px !important;
+    font-size: 0.9rem !important;
+  }
+
+  /* Profile Screen Mobile Adjustments */
+  .profile-container {
+    padding-bottom: 20px !important;
+  }
+
+  /* Grid adjustments for mobile */
+  .characters,
+  .avatar-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+}
+
+/* Ensure better scrolling and visibility */
+.app-content {
+  overflow-y: auto !important;
+}
+
+.profile-container {
+  overflow-y: auto !important;
+  flex: 1 !important;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.4s ease-out forwards;
+}
+
+.animate-scale-in {
+  animation: fadeInScale 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Menu Footer Styles */
+.menu-footer {
+  margin-top: auto;
+  padding-bottom: 24px;
+  display: flex !important;
+  gap: 12px !important;
+  width: 100%;
+}
+
+@media (max-width: 400px) {
+  .menu-footer {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+}
+
+.btn-action-shop,
+.btn-action-exit {
+  flex: 1;
+  padding: 14px;
+  border-radius: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: all 0.2s ease;
+  font-family: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-action-shop {
+  background: rgba(148, 163, 255, 0.15);
+  color: #fff;
+}
+
+.btn-action-shop:hover {
+  background: rgba(148, 163, 255, 0.25);
+  border-color: #38bdf8;
+  transform: translateY(-2px);
+}
+
+.btn-action-exit {
+  background: rgba(239, 68, 68, 0.1);
+  color: #f87171;
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.btn-action-exit:hover {
+  background: rgba(239, 68, 68, 0.2);
+  border-color: #f87171;
+  transform: translateY(-2px);
+}
+
+/* Стили для игровых профилей в бою */
+.game-profile-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  background: rgba(15, 23, 42, 0.6);
+  border-radius: 16px;
+  transition: all 0.2s ease;
+}
+
+.game-profile-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.game-profile-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100px;
+}
+
+.game-profile-info {
+  font-size: 0.8rem;
+  font-feature-settings: "tnum";
+}
+
+.game-profile-score {
+  font-weight: 800;
+  font-size: 1.2rem;
+  color: #fff;
+  line-height: 1;
+}
+
+/* Final Visibility Fixes for iPhone SE and small screens */
+@media (max-width: 380px) {
+  .menu-card {
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .game-btn {
+    padding: 14px 6px;
+    font-size: 0.8rem;
+  }
+
+  .logo-title {
+    font-size: 1.8rem;
+  }
+
+  .profile-container {
+    padding: 0 10px;
+  }
+
+  .back-btn {
+    padding: 6px 12px;
+    font-size: 0.85rem;
+  }
+
+  .game-profile-card {
+    padding: 6px 10px;
+    gap: 8px;
+  }
+
+  .game-profile-avatar {
+    width: 36px;
+    height: 36px;
+  }
+
+  .game-profile-name {
+    font-size: 0.85rem;
+    max-width: 85px;
+  }
+
+  .game-profile-info {
+    font-size: 0.8rem;
+  }
+
+  .game-profile-score {
+    font-size: 1.15rem;
+  }
+
+  .game-header-title {
+    font-size: 1.1rem;
+  }
+
+  .wallet-widget {
+    padding: 6px 12px;
+    gap: 6px;
+  }
+
+  .wallet-widget span {
+    font-size: 0.85rem;
+  }
+
+  .menu-card img {
+    width: 34px;
+    height: 34px;
+  }
+
+  .hands-arena {
+    height: 220px !important;
+  }
+
+  .lobby-panel {
+    margin-top: 10px !important;
+  }
+
+  .app-content {
+    padding-bottom: 40px !important;
+  }
+
+  .hands-countdown {
+    font-size: 4rem !important;
+  }
+
+  .round-result-text {
+    font-size: 1.8rem !important;
+  }
+
+  .match-card {
+    padding: 20px 15px !important;
+  }
+
+  .match-title {
+    font-size: 1.2rem !important;
+  }
 }

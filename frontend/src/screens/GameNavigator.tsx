@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { getSfxVolume, setSfxVolume, getMusicVolume, setMusicVolume } from "../sounds/useSound";
 import type { User } from "../App";
 import { GameScreen } from "./GameScreen";
 import { DailyBonusScreen } from "./DailyBonusScreen";
@@ -36,13 +37,15 @@ interface GameNavigatorProps {
 }
 
 export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, token, refreshUser }) => {
-  const playSound = useSound();
+  const { playSound } = useSound();
+
+  const [shopItems, setShopItems] = useState<Skin[]>([]);
+  const [sfxVolume, setSfxVolState] = useState(getSfxVolume());
+  const [musicVolume, setMusicVolState] = useState(getMusicVolume());
 
   const userStorageKey = `rps_save_${user.nickname}`;
   const balance = user.points;
   const inventory = user.inventory || [];
-
-  const [shopItems, setShopItems] = useState<Skin[]>([]);
 
   const [modal, setModal] = useState<{ isOpen: boolean; title: string; message: string; type: 'success' | 'error' | 'info' }>({
     isOpen: false, title: "", message: "", type: "info"
@@ -64,13 +67,21 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
   });
 
   const [screen, setScreen] = useState<Screen>("menu");
-  const [returnScreen, setReturnScreen] = useState<Screen>("menu");
+  const [navHistory, setNavHistory] = useState<Screen[]>([]);
   const [navContext, setNavContext] = useState<NavContext>("menu");
   const [gameMode, setGameMode] = useState<"bot" | "pvp">("bot");
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [isChangingAvatar, setIsChangingAvatar] = useState(false);
+  const [selectedAchievement, setSelectedAchievement] = useState<any>(null);
 
   const isBonusReady = !user.last_claim_date || (new Date().toISOString().split('T')[0] !== user.last_claim_date);
+
+  // Helper for stack navigation
+  const navigateTo = (target: Screen) => {
+    playSound('click_soft');
+    setNavHistory(prev => [...prev, screen]);
+    setScreen(target);
+  };
 
   useEffect(() => {
     if (user.equippedBorderId !== undefined) {
@@ -96,22 +107,41 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
           closeModal();
           return;
         }
+        if (selectedAchievement) {
+          setSelectedAchievement(null);
+          playSound('click_soft');
+          return;
+        }
 
-        playSound('click_soft');
+        if (isChangingAvatar) {
+          playSound('click_soft');
+          setIsChangingAvatar(false);
+          return;
+        }
+
+        // Custom Stack Back Logic for ESC
+        if (navHistory.length > 0) {
+          playSound('click_soft');
+          const lastScreen = navHistory[navHistory.length - 1];
+          setNavHistory(prev => prev.slice(0, -1));
+          setScreen(lastScreen);
+          return;
+        }
 
         if (screen === "menu") return;
 
+        playSound('click_soft');
         if (screen === "game") {
           setNavContext("menu");
           setScreen("menu");
         } else {
-          setScreen(returnScreen);
+          setScreen("menu");
         }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [screen, returnScreen, modal.isOpen]);
+  }, [screen, navHistory, modal.isOpen, isChangingAvatar, selectedAchievement]);
 
   const handleBuy = async (item: Skin) => {
     playSound('click_sharp');
@@ -138,6 +168,8 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
     playSound('click_main');
     setGameMode(mode);
     setNavContext("game");
+    // When game starts, we push menu to history so back returns to menu
+    setNavHistory(prev => [...prev, "menu"]);
     setScreen("game");
   };
 
@@ -145,22 +177,15 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
     playSound('click_soft');
     setNavContext("menu");
     setScreen("menu");
+    setNavHistory([]); // Clear history involves resetting to main state
   };
 
   const goToAuxiliaryScreen = (target: Screen) => {
-    playSound('click_soft');
-    if (screen === "menu" || screen === "game") {
-      setReturnScreen(screen);
-    }
-    setScreen(target);
+    navigateTo(target);
   };
 
   const goToLeaderboard = async () => {
-    playSound('click_soft');
-    if (screen === "menu" || screen === "game") {
-      setReturnScreen(screen);
-    }
-    setScreen("leaders");
+    navigateTo("leaders");
     try {
       const res = await fetch(`${API_URL}/api/leaderboard`);
       const data = await res.json();
@@ -172,16 +197,26 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
   };
 
   const goToTournament = () => {
-    playSound('click_soft');
-    if (screen === "menu" || screen === "game") {
-      setReturnScreen(screen);
-    }
-    setScreen("tournament");
+    navigateTo("tournament");
   };
 
   const handleBack = () => {
     playSound('click_soft');
-    setScreen(returnScreen);
+    if (isChangingAvatar) {
+      setIsChangingAvatar(false);
+      return;
+    }
+
+    if (navHistory.length > 0) {
+      const lastScreen = navHistory[navHistory.length - 1];
+      setNavHistory(prev => prev.slice(0, -1));
+      setScreen(lastScreen);
+    } else {
+      // Fallback if no history (should happen rarely if used correctly)
+      if (screen !== "menu") {
+        setScreen("menu");
+      }
+    }
   };
 
   const handleEquip = async (id: number) => {
@@ -260,17 +295,32 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
         onClose={closeModal}
       />
 
-      <div className="app-content" style={{ maxWidth: 448, margin: "0 auto", display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      <div className="app-content">
 
         {screen !== "game" && (
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, marginTop: 10, padding: "0 4px" }}>
             <div
               className="user-pill menu-card"
               onClick={() => goToAuxiliaryScreen("profile")}
-              style={{ padding: '8px 12px', borderRadius: '999px', gap: 8, cursor: 'pointer', border: '1px solid rgba(148, 163, 255, 0.4)' }}
+              style={{
+                padding: '8px 12px',
+                borderRadius: '999px',
+                gap: 8,
+                cursor: 'pointer',
+                border: '1px solid rgba(148, 163, 255, 0.4)',
+                maxWidth: '160px',
+                overflow: 'hidden'
+              }}
             >
-              <img src={user.avatar} style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }} alt="User" />
-              <span style={{ fontWeight: 600 }}>{user.nickname}</span>
+              <img src={user.avatar} style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} alt="User" />
+              <span style={{
+                fontWeight: 600,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
+              }}>
+                {user.nickname}
+              </span>
             </div>
 
             <div
@@ -309,8 +359,7 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
             </div>
 
             <div className="menu-footer">
-              <button className="btn-action-shop" onClick={() => goToAuxiliaryScreen("shop")}><span>🛒</span> Магазин</button>
-              <button className="btn-action-exit" onClick={handleLogout}>Выход</button>
+              <button className="btn-action-shop" style={{ width: '100%' }} onClick={() => goToAuxiliaryScreen("shop")}><span>🛒</span> Магазин</button>
             </div>
           </div>
         )}
@@ -410,9 +459,9 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
                     #{idx + 1}
                   </div>
                   <img src={player.avatar} style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${idx < 3 ? '#facc15' : 'transparent'}` }} alt="avatar" />
-                  <div style={{ flex: 1, fontWeight: '700' }}>
+                  <div style={{ flex: 1, fontWeight: '700', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
                     {player.username}
-                    {player.id === user.id && <span style={{ marginLeft: 8, fontSize: '0.6rem', background: currentThemeColor, color: '#000', padding: '2px 6px', borderRadius: 4 }}>ВЫ</span>}
+                    {player.id === user.id && <span style={{ marginLeft: 8, fontSize: '0.6rem', background: currentThemeColor, color: '#000', padding: '2px 6px', borderRadius: 4, verticalAlign: 'middle' }}>ВЫ</span>}
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ color: '#4ade80', fontWeight: '900', fontSize: '0.9rem' }}>{player.wins} 🏆</div>
@@ -508,11 +557,10 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20 }}>
               <button onClick={handleBack} className="back-btn">← Назад</button>
               <div style={{ flex: 1, textAlign: 'center', fontFamily: 'Bounded', fontSize: '1.2rem', letterSpacing: '0.1em' }}>ПРОФИЛЬ</div>
-              <div style={{ width: 60 }}></div> {/* Spacer */}
+              <div style={{ width: 60 }}></div>
             </div>
 
             <div className="profile-container" style={{ flex: 1, overflowY: 'auto', paddingBottom: 20 }}>
-              {/* Аватар и Основная инфо */}
               <div style={{ textAlign: 'center', marginBottom: 30, position: 'relative' }}>
                 <div
                   onClick={() => setIsChangingAvatar(!isChangingAvatar)}
@@ -553,7 +601,6 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
                   }}>
                     ✏️
                   </div>
-                  {/* Кнопка уровня */}
                   <div style={{
                     position: 'absolute',
                     bottom: 5,
@@ -611,13 +658,11 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
                 </div>
               </div>
 
-              {/* Основная стата */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
                 <StatCard label="ПОБЕДЫ" value={user.wins} color="#4ade80" icon="🏆" />
                 <StatCard label="ПОРАЖЕНИЯ" value={user.losses} color="#f87171" icon="💀" />
               </div>
 
-              {/* Дополнительная инфо */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <StatCard
                   label="ВИНРЕЙТ"
@@ -635,25 +680,165 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
                 />
               </div>
 
-              {/* Достижения (Placeholders) */}
               <div style={{ marginTop: 30 }}>
                 <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: 15, textAlign: 'center', letterSpacing: '0.1em' }}>ДОСТИЖЕНИЯ</div>
                 <div style={{ display: 'flex', justifyContent: 'center', gap: 15 }}>
-                  <Achievement icon="🎯" unlocked={user.wins > 0} title="Первая кровь" />
-                  <Achievement icon="🔥" unlocked={user.wins >= 5} title="В огне" />
-                  <Achievement icon="👑" unlocked={user.total_earned >= 1000} title="Богач" />
-                  <Achievement icon="⚡" unlocked={user.streak >= 3} title="Марафонец" />
+                  <Achievement
+                    icon="🎯"
+                    unlocked={user.wins > 0}
+                    title="Первая кровь"
+                    description="Одержите свою первую победу в любом режиме."
+                    onClick={() => setSelectedAchievement({ title: "Первая кровь", description: "Одержите свою первую победу в любом режиме.", unlocked: user.wins > 0, icon: "🎯" })}
+                  />
+                  <Achievement
+                    icon="🔥"
+                    unlocked={user.wins >= 5}
+                    title="В огне"
+                    description="Одержите 5 побед над противниками."
+                    onClick={() => setSelectedAchievement({ title: "В огне", description: "Одержите 5 побед над противниками.", unlocked: user.wins >= 5, icon: "🔥" })}
+                  />
+                  <Achievement
+                    icon="👑"
+                    unlocked={user.total_earned >= 1000}
+                    title="Богач"
+                    description="Заработайте суммарно 1000 монет."
+                    onClick={() => setSelectedAchievement({ title: "Богач", description: "Заработайте суммарно 1000 монет за все время игры.", unlocked: user.total_earned >= 1000, icon: "👑" })}
+                  />
+                  <Achievement
+                    icon="⚡"
+                    unlocked={user.streak >= 3}
+                    title="Марафонец"
+                    description="Одержите 3 победы подряд."
+                    onClick={() => setSelectedAchievement({ title: "Марафонец", description: "Наберите серию из 3 побед подряд в PvP или против бота.", unlocked: user.streak >= 3, icon: "⚡" })}
+                  />
+                </div>
+              </div>
+
+              <div style={{ marginTop: 30, padding: '20px', background: 'rgba(255,255,255,0.03)', borderRadius: '20px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <div style={{ fontSize: '0.8rem', color: '#64748b', marginBottom: 20, textAlign: 'center', letterSpacing: '0.1em' }}>НАСТРОЙКИ ЗВУКА</div>
+
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: '0.9rem' }}>
+                    <span>Музыка</span>
+                    <span style={{ color: currentThemeColor }}>{Math.round(musicVolume * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0" max="1" step="0.01"
+                    value={musicVolume}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      setMusicVolState(val);
+                      setMusicVolume(val);
+                    }}
+                    style={{ width: '100%', accentColor: currentThemeColor }}
+                  />
+                </div>
+
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, fontSize: '0.9rem' }}>
+                    <span>Эффекты</span>
+                    <span style={{ color: currentThemeColor }}>{Math.round(sfxVolume * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0" max="1" step="0.01"
+                    value={sfxVolume}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value);
+                      setSfxVolState(val);
+                      setSfxVolume(val);
+                      const audio = new Audio("/sounds/button-click-short-calm-gentle.mp3");
+                      audio.volume = val * 0.1;
+                      audio.play().catch(() => { });
+                    }}
+                    style={{ width: '100%', accentColor: currentThemeColor }}
+                  />
                 </div>
               </div>
             </div>
 
-            <div style={{ padding: '20px 0' }}>
+            <div style={{ padding: '20px 0', marginTop: 'auto' }}>
               <button
-                className="secondary-btn"
-                style={{ width: '100%', padding: '15px', borderRadius: '16px', background: 'rgba(239, 68, 68, 0.1)', color: '#f87171', borderColor: 'rgba(248, 113, 113, 0.2)' }}
+                className="btn-action-exit"
+                style={{ width: '100%' }}
                 onClick={handleLogout}
               >
                 ВЫЙТИ ИЗ АККАУНТА
+              </button>
+            </div>
+          </div>
+        )}
+
+        {selectedAchievement && (
+          <div
+            className="animate-fade-in"
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.85)',
+              backdropFilter: 'blur(10px)',
+              zIndex: 10000,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 20
+            }}
+            onClick={() => setSelectedAchievement(null)}
+          >
+            <div
+              className="animate-scale-in menu-card"
+              style={{
+                flexDirection: 'column',
+                padding: '40px 30px',
+                textAlign: 'center',
+                maxWidth: 320,
+                borderColor: selectedAchievement.unlocked ? `${currentThemeColor}60` : 'rgba(255,255,255,0.1)',
+                background: 'rgba(15, 23, 42, 0.95)',
+                boxShadow: selectedAchievement.unlocked ? `0 0 40px ${currentThemeColor}20` : 'none'
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div style={{
+                fontSize: '4rem',
+                marginBottom: 20,
+                filter: selectedAchievement.unlocked ? 'none' : 'grayscale(1) opacity(0.3)'
+              }}>
+                {selectedAchievement.icon}
+              </div>
+              <h3 style={{ fontFamily: 'Bounded', fontSize: '1.2rem', marginBottom: 10, color: '#fff' }}>
+                {selectedAchievement.title.toUpperCase()}
+              </h3>
+              <p style={{ color: '#9ca3af', fontSize: '0.9rem', lineHeight: '1.6', marginBottom: 25 }}>
+                {selectedAchievement.description}
+              </p>
+              <div style={{
+                fontSize: '0.75rem',
+                fontWeight: 800,
+                color: selectedAchievement.unlocked ? '#4ade80' : '#f87171',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                background: selectedAchievement.unlocked ? 'rgba(74, 222, 128, 0.1)' : 'rgba(248, 113, 113, 0.1)',
+                padding: '8px 16px',
+                borderRadius: '99px',
+                border: `1px solid ${selectedAchievement.unlocked ? 'rgba(74, 222, 128, 0.2)' : 'rgba(248, 113, 113, 0.2)'}`
+              }}>
+                {selectedAchievement.unlocked ? 'ДОСТИГНУТО ✓' : 'ЕЩЕ НЕ ПОЛУЧЕНО'}
+              </div>
+
+              <button
+                onClick={() => setSelectedAchievement(null)}
+                style={{
+                  marginTop: 30,
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#64748b',
+                  fontSize: '0.8rem',
+                  cursor: 'pointer',
+                  textDecoration: 'underline'
+                }}
+              >
+                Закрыть
               </button>
             </div>
           </div>
@@ -665,7 +850,7 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
 
 const MenuButton = ({ title, subtitle, icon, onClick, isTournament }: any) => {
   const containerClass = isTournament ? "menu-card tournament-card" : "menu-card";
-  const playSound = useSound();
+  const { playSound } = useSound();
 
   const handleClick = () => {
     playSound('click_main');
@@ -714,21 +899,32 @@ const StatCard = ({ label, value, color, isFullWidth, icon }: any) => (
   </div>
 );
 
-const Achievement = ({ icon, unlocked, title }: any) => (
-  <div style={{
-    width: 50,
-    height: 50,
-    borderRadius: '14px',
-    background: unlocked ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.2)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '1.5rem',
-    filter: unlocked ? 'none' : 'grayscale(1)',
-    opacity: unlocked ? 1 : 0.4,
-    border: unlocked ? '1px solid rgba(255,255,255,0.1)' : '1px dashed rgba(255,255,255,0.1)',
-    cursor: 'help'
-  }} title={title}>
-    {icon}
-  </div>
-);
+const Achievement = ({ icon, unlocked, title, onClick }: any) => {
+  const { playSound } = useSound();
+  return (
+    <div
+      onClick={() => {
+        playSound('click_main');
+        onClick();
+      }}
+      style={{
+        width: 50,
+        height: 50,
+        borderRadius: '14px',
+        background: unlocked ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.2)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '1.5rem',
+        filter: unlocked ? 'none' : 'grayscale(1)',
+        opacity: unlocked ? 1 : 0.4,
+        border: unlocked ? '1px solid rgba(255,255,255,0.1)' : '1px dashed rgba(255,255,255,0.1)',
+        cursor: 'pointer',
+        transition: 'all 0.2s ease'
+      }}
+      title={title}
+    >
+      {icon}
+    </div>
+  );
+};

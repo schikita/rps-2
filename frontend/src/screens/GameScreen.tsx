@@ -1,4 +1,5 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import type { User } from "../App";
 import { HandFightAnimation } from "../components/HandFightAnimation";
 import { type Move } from "../engine/rps";
@@ -23,28 +24,52 @@ interface GameScreenProps {
 const BOT = { name: "Кибер-бот", avatar: BOT_AVATAR };
 
 export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, token, refreshUser, onBack, onOpenWallet, themeColor }) => {
+    const { playSound, getMusicVolume, isMusicPlaying, playMusic } = useSound();
+
     const [betAmount, setBetAmount] = useState<number>(mode === "bot" ? 0 : 50);
-    const [errorMsg, setErrorMsg] = useState<string | null>(null);
     const [isBetListOpen, setIsBetListOpen] = useState(false);
+    const [localBalance, setLocalBalance] = useState(balance);
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+    // Game State
+    const [playerMove, setPlayerMove] = useState<Move | null>(null);
+    const [botMove, setBotMove] = useState<Move | null>(null);
     const [isLoading, setIsLoading] = useState(false);
 
+    // Match logic & Stats
+    const [finalProfit, setFinalProfit] = useState(0);
     const [phase, setPhase] = useState<Phase>("lobby");
     const [countdown, setCountdown] = useState<number | null>(null);
-
-    const [playerMove, setPlayerMove] = useState<Move | null>(null);
     const playerMoveRef = useRef<Move | null>(null);
-    const [botMove, setBotMove] = useState<Move | null>(null);
 
     const [playerWins, setPlayerWins] = useState(0);
     const [botWins, setBotWins] = useState(0);
 
-    const [matchResult, setMatchResult] = useState<"win" | "lose" | null>(null);
-    const [finalProfit, setFinalProfit] = useState(0);
+    const [matchResult, setMatchResult] = useState<"win" | "lose" | "draw" | null>(null);
     const [lastRoundResult, setLastRoundResult] = useState<"win" | "lose" | "draw" | null>(null);
+    const [showResultReport, setShowResultReport] = useState(false);
 
     const timerRef = useRef<number | null>(null);
 
-    const playSound = useSound();
+    // Initial load
+    useEffect(() => {
+        const vol = getMusicVolume();
+        if (vol > 0 && !isMusicPlaying()) {
+            playMusic('bg_music');
+        }
+    }, []);
+
+    // Effect to handle delay for result report
+    useEffect(() => {
+        if (phase === "matchOver") {
+            const timer = setTimeout(() => {
+                setShowResultReport(true);
+            }, 2000); // 2 seconds delay
+            return () => clearTimeout(timer);
+        } else {
+            setShowResultReport(false);
+        }
+    }, [phase]);
 
     const isBonusReady = !user.last_claim_date || (new Date().toISOString().split('T')[0] !== user.last_claim_date);
 
@@ -161,11 +186,6 @@ export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, tok
 
             setBotMove(data.botMove);
 
-            let newP = playerWins;
-            let newB = botWins;
-            if (data.result === 'win') newP++;
-            if (data.result === 'lose') newB++;
-
             setPlayerWins(data.playerWins);
             setBotWins(data.botWins);
             setLastRoundResult(data.result);
@@ -221,7 +241,6 @@ export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, tok
                 <span className="game-header-title" style={{ color: mode === 'pvp' ? '#f87171' : '#4ade80' }}>
                     {mode === 'pvp' ? 'АРЕНА PvP' : 'ТРЕНИРОВКА'}
                 </span>
-                {/* Виджет кошелька показываем в шапке только если мы в лобби (не в игре) */}
                 {!isGameActive && (
                     <div className="wallet-widget menu-card" onClick={onOpenWallet} style={{ borderColor: themeColor, padding: '8px 12px', borderRadius: '999px', gap: 8, margin: 0, position: 'relative' }}>
                         <span className="coin-icon">💰</span>
@@ -234,7 +253,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, tok
 
             {/* Лобби */}
             {phase === "lobby" && (
-                <div className="lobby-panel" style={{ marginTop: 40 }}>
+                <div className="lobby-panel">
                     <div style={{ fontSize: '3rem', marginBottom: 10, textAlign: 'center' }}>{mode === 'bot' ? '🤖' : '⚔️'}</div>
                     {mode === "bot" ? (
                         <>
@@ -248,7 +267,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, tok
                             <div className="bet-dropdown-container">
                                 <div className="bet-dropdown-trigger" onClick={() => !isLoading && setIsBetListOpen(!isBetListOpen)} style={{ borderColor: themeColor, opacity: isLoading ? 0.5 : 1 }}>
                                     <span>{betAmount} 💰</span>
-                                    <span style={{ transform: isBetListOpen ? 'rotate(180deg)' : 'rotate(0)', transition: '0.2s' }}>▼</span>
+                                    <span style={{ transform: isBetListOpen ? 'rotate(180deg)' : '0', transition: '0.2s' }}>▼</span>
                                 </div>
                                 {isBetListOpen && !isLoading && (
                                     <div className="bet-dropdown-menu">
@@ -272,25 +291,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, tok
                 <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
 
                     {/* 1. ПРОФИЛЬ ПРОТИВНИКА */}
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '12px',
-                        padding: '10px 14px',
-                        background: 'rgba(15, 23, 42, 0.6)',
-                        border: '1px solid #f87171',
-                        borderRadius: '16px',
-                        marginBottom: '10px',
-                        boxShadow: '0 4px 20px rgba(248, 113, 113, 0.2)'
-                    }}>
-                        <img src={BOT.avatar} style={{ width: 44, height: 44, borderRadius: '50%', border: '2px solid #f87171', objectFit: 'cover' }} alt="Bot" />
-                        <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: 'bold', fontSize: '0.95rem' }}>{BOT.name}</div>
-                            <div style={{ fontSize: '0.75rem', color: '#f87171', opacity: 0.8 }}>Уровень 1</div>
+                    <div className="game-profile-card" style={{ border: '1px solid #f87171', marginBottom: '10px', boxShadow: '0 4px 20px rgba(248, 113, 113, 0.2)' }}>
+                        <img src={BOT.avatar} className="game-profile-avatar" style={{ border: '2px solid #f87171' }} alt="Bot" />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            <div className="game-profile-name">{BOT.name}</div>
+                            <div className="game-profile-info" style={{ color: '#f87171', opacity: 0.8 }}>Уровень 1</div>
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: '0.65rem', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Раунд</div>
-                            <div style={{ fontWeight: '800', fontSize: '1.2rem', color: '#fff' }}>{botWins}</div>
+                            <div className="game-profile-score">{botWins}</div>
                         </div>
                     </div>
 
@@ -302,29 +310,24 @@ export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, tok
                             playerMove={playerMove}
                             botMove={botMove}
                             lastRoundResult={lastRoundResult}
+                            showResultOverlay={!showResultReport}
                         />
 
-                        {/* СЧЕТ СПРАВА */}
-                        <div style={{
-                            position: 'absolute',
-                            right: '10px',
-                            top: '50%',
-                            transform: 'translateY(-50%)',
-                            zIndex: 10,
-                            background: 'rgba(0,0,0,0.3)',
-                            padding: '8px',
-                            borderRadius: '12px',
-                            backdropFilter: 'blur(4px)',
-                            border: '1px solid rgba(255,255,255,0.1)'
-                        }}>
-                            <div style={{ color: themeColor, fontSize: '0.7rem', textAlign: 'center', marginBottom: 2 }}>ВЫ</div>
-                            <div style={{ textAlign: 'center', fontWeight: '800', fontSize: '1.5rem', lineHeight: 1 }}>
-                                <span style={{ color: themeColor }}>{playerWins}</span>
-                                <span style={{ color: '#9ca3af', margin: '0 4px', fontSize: '1rem' }}>:</span>
-                                <span style={{ color: '#f87171' }}>{botWins}</span>
-                            </div>
-                            <div style={{ color: '#f87171', fontSize: '0.7rem', textAlign: 'center', marginTop: 2 }}>СОПЕРНИК</div>
-                        </div>
+                        {/* СЧЕТ ПО ЦЕНТРУ (PORTAL TO SCREEN) */}
+                        {createPortal(
+                            <div className="score-panel">
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                                    <div style={{ color: themeColor, fontSize: '0.7rem', lineHeight: 1 }}>ВЫ</div>
+                                    <div style={{ fontWeight: '800', fontSize: '1.5rem', lineHeight: 1, display: 'flex', alignItems: 'center' }}>
+                                        <span style={{ color: themeColor }}>{playerWins}</span>
+                                        <span style={{ color: '#9ca3af', margin: '0 4px', fontSize: '1rem' }}>:</span>
+                                        <span style={{ color: '#f87171' }}>{botWins}</span>
+                                    </div>
+                                    <div style={{ color: '#f87171', fontSize: '0.7rem', lineHeight: 1 }}>СОПЕРНИК</div>
+                                </div>
+                            </div>,
+                            document.body
+                        )}
                     </div>
 
                     {/* 3. УПРАВЛЕНИЕ */}
@@ -347,25 +350,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, tok
                     </div>
 
                     {/* 4. ВАШ ПРОФИЛЬ (Снизу) */}
-                    <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '12px',
-                        padding: '10px 14px',
-                        background: 'rgba(15, 23, 42, 0.6)',
-                        border: `1px solid ${themeColor}`,
-                        borderRadius: '16px',
-                        boxShadow: `0 4px 20px ${themeColor}20`
-                    }}>
-                        <img src={user.avatar} style={{ width: 44, height: 44, borderRadius: '50%', border: `2px solid ${themeColor}`, objectFit: 'cover' }} alt="Me" />
-                        <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: 'bold', fontSize: '0.95rem' }}>{user.nickname}</div>
-
-                            {/* БАЛАНС (Dot removed from here) */}
+                    <div className="game-profile-card" style={{ border: `1px solid ${themeColor}`, boxShadow: `0 4px 20px ${themeColor}20` }}>
+                        <img src={user.avatar} className="game-profile-avatar" style={{ border: `2px solid ${themeColor}` }} alt="Me" />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                            <div className="game-profile-name">{user.nickname}</div>
                             <div
                                 onClick={onOpenWallet}
+                                className="game-profile-info"
                                 style={{
-                                    fontSize: '0.85rem',
                                     color: '#facc15',
                                     display: 'flex',
                                     alignItems: 'center',
@@ -378,11 +370,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, tok
                             >
                                 <span>💰</span> {balance}
                             </div>
-
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                            <div style={{ fontSize: '0.65rem', color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Раунд</div>
-                            <div style={{ fontWeight: '800', fontSize: '1.2rem', color: '#fff' }}>{playerWins}</div>
+                            <div className="game-profile-score">{playerWins}</div>
                         </div>
                     </div>
 
@@ -390,7 +380,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, tok
             )}
 
             {/* Результат */}
-            {phase === "matchOver" && (
+            {phase === "matchOver" && showResultReport && (
                 <div className="match-overlay">
                     <div className="match-card" style={{ borderColor: themeColor }}>
                         <div style={{ fontSize: '4rem', marginBottom: '10px' }}>
@@ -399,7 +389,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, tok
                         <h2 className="match-title">{matchResult === "win" ? "ПОБЕДА!" : "ПОРАЖЕНИЕ"}</h2>
 
                         <div className="match-score" style={{ fontSize: '1.5rem', margin: '15px 0', color: finalProfit >= 0 ? '#4ade80' : '#f87171' }}>
-                            {finalProfit > 0 ? `+${finalProfit} 💰` : `${finalProfit} 💰`}
+                            {finalProfit > 0 ? `+ ${finalProfit} 💰` : `${finalProfit} 💰`}
                         </div>
 
                         <button className="primary-btn" onClick={resetToLobby} style={{ '--theme-color': themeColor } as React.CSSProperties}>В лобби</button>
