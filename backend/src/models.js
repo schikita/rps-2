@@ -49,7 +49,10 @@ const User = sequelize.define('User', {
     // СТАТИСТИКА
     wins: { type: DataTypes.INTEGER, defaultValue: 0 },
     losses: { type: DataTypes.INTEGER, defaultValue: 0 },
-    total_earned: { type: DataTypes.INTEGER, defaultValue: 0 }
+    total_earned: { type: DataTypes.INTEGER, defaultValue: 0 },
+
+    // БОНУСЫ
+    rulesBonusClaimed: { type: DataTypes.BOOLEAN, defaultValue: false }
 });
 
 // 2. МОДЕЛЬ ПРЕДМЕТА (Item - Магазин)

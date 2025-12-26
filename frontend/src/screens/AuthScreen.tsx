@@ -13,7 +13,7 @@ const PRESET_AVATARS = [
 ];
 
 interface AuthScreenProps {
-  onLoginSuccess: (userData: any, token: string) => void;
+  onLoginSuccess: (userData: unknown, token: string) => void;
 }
 
 export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
@@ -61,15 +61,18 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
       if (!res.ok) throw new Error(data.error || "Что-то пошло не так");
 
       if (isRegistering) {
+        // Flag to trigger Privacy Policy screen after subsequent login
+        localStorage.setItem("privacy_policy_needed", "true");
+
         setIsRegistering(false);
         // Success Modal
         showModal("АККАУНТ СОЗДАН", "Ваш аккаунт был успешно создан! Теперь вы можете войти.", "success");
       } else {
         onLoginSuccess(data.user, data.token);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Error Modal
-      showModal("ОШИБКА АВТОРИЗАЦИИ", err.message, "error");
+      showModal("ОШИБКА АВТОРИЗАЦИИ", (err as Error).message || "Unknown error", "error");
     }
   };
 

@@ -1,5 +1,6 @@
 require("dotenv").config();
 const express = require("express");
+const path = require("path");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
@@ -122,6 +123,35 @@ app.post('/api/daily-bonus', authenticateToken, async (req, res) => {
             reward,
             coins: user.coins,
             streak: user.loginStreak
+        });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Ошибка сервера" });
+    }
+});
+
+// БОНУС ЗА ПРОЧТЕНИЕ ПРАВИЛ
+app.post('/api/bonus/rules', authenticateToken, async (req, res) => {
+    try {
+        const user = await User.findByPk(req.userId);
+
+        if (user.rulesBonusClaimed) {
+            return res.json({
+                success: false,
+                message: "Бонус уже получен",
+                new_balance: user.coins
+            });
+        }
+
+        user.coins += 50;
+        user.rulesBonusClaimed = true;
+        await user.save();
+
+        res.json({
+            success: true,
+            message: "Бонус 50 монет получен!",
+            new_balance: user.coins,
+            added: 50
         });
     } catch (e) {
         console.error(e);
@@ -326,6 +356,17 @@ async function startServer() {
     // ВАЖНО: alter: true обновляет структуру, НЕ удаляя данные
     await sequelize.sync({ alter: true });
     await seedShop();
+
+
+    // Serve static files from the React frontend app
+    const distPath = path.join(__dirname, '../../dist');
+    app.use(express.static(distPath));
+
+    // Anything that doesn't match the above, send back index.html
+    app.get('*', (req, res) => {
+        res.sendFile(path.join(distPath, 'index.html'));
+    });
+
     app.listen(PORT, () => console.log(`🚀 Сервер запущен на порту ${PORT}`));
 }
 startServer();

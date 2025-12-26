@@ -30,10 +30,8 @@ export const setMusicVolume = (vol: number) => {
   localStorage.setItem(STORAGE_KEY_MUSIC, vol.toString());
 };
 
-// Helper to check if music is playing - simpler approach for now
-const isMusicPlaying = () => {
-  return false; // Valid stub since we handle music via global audio usually or external components
-};
+// Module-level global to keep track of the music instance across hook calls
+let musicAudio: HTMLAudioElement | null = null;
 
 export const useSound = () => {
   const playSound = useCallback((type: keyof typeof SOUND_PATHS) => {
@@ -49,16 +47,60 @@ export const useSound = () => {
     }
   }, []);
 
-  // Stub for playing background music if not implemented centrally
-  const playMusic = useCallback((type: string) => {
-    // Implement logic if music paths exist, or leave as placeholder
-    console.log(`Playing music: ${type}`);
+  const stopMusic = useCallback(() => {
+    if (musicAudio) {
+      musicAudio.pause();
+      musicAudio.currentTime = 0;
+      musicAudio = null;
+    }
+  }, []);
+
+  const playMusic = useCallback((_type: string) => {
+    try {
+      const volume = getMusicVolume();
+      if (volume <= 0) {
+        stopMusic();
+        return;
+      }
+
+      // If already playing, just update volume
+      if (musicAudio) {
+        musicAudio.volume = volume * 0.8;
+        if (musicAudio.paused) {
+          musicAudio.play().catch(e => console.warn("Music play error:", e));
+        }
+        return;
+      }
+
+      // We only have one game music for now
+      musicAudio = new Audio("/sounds/Game-Music.mp3");
+      musicAudio.volume = volume * 0.8;
+      musicAudio.loop = true;
+      musicAudio.play().catch((e) => {
+        console.warn("Music play error:", e);
+        musicAudio = null;
+      });
+    } catch (e) {
+      console.warn("Music error:", e);
+    }
+  }, [stopMusic]);
+
+  const isMusicPlayingStatus = useCallback(() => {
+    return musicAudio !== null && !musicAudio.paused;
+  }, []);
+
+  const updateMusicVolume = useCallback((vol: number) => {
+    if (musicAudio) {
+      musicAudio.volume = vol * 0.8;
+    }
   }, []);
 
   return {
     playSound,
     getMusicVolume,
-    isMusicPlaying,
-    playMusic
+    isMusicPlaying: isMusicPlayingStatus,
+    playMusic,
+    stopMusic,
+    updateMusicVolume
   };
 };

@@ -24,11 +24,11 @@ interface GameScreenProps {
 const BOT = { name: "Кибер-бот", avatar: BOT_AVATAR };
 
 export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, token, refreshUser, onBack, onOpenWallet, themeColor }) => {
-    const { playSound, getMusicVolume, isMusicPlaying, playMusic } = useSound();
+    const { playSound } = useSound();
 
     const [betAmount, setBetAmount] = useState<number>(mode === "bot" ? 0 : 50);
     const [isBetListOpen, setIsBetListOpen] = useState(false);
-    const [localBalance, setLocalBalance] = useState(balance);
+
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
     // Game State
@@ -50,14 +50,6 @@ export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, tok
     const [showResultReport, setShowResultReport] = useState(false);
 
     const timerRef = useRef<number | null>(null);
-
-    // Initial load
-    useEffect(() => {
-        const vol = getMusicVolume();
-        if (vol > 0 && !isMusicPlaying()) {
-            playMusic('bg_music');
-        }
-    }, []);
 
     // Effect to handle delay for result report
     useEffect(() => {
@@ -120,7 +112,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, tok
                     setPlayerWins(0);
                     setBotWins(0);
                 }
-            } catch (e) { setErrorMsg("Ошибка старта"); }
+            } catch { setErrorMsg("Ошибка старта"); }
             setIsLoading(false);
             return;
         }
@@ -144,7 +136,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, tok
             setPhase("idle");
             setPlayerWins(0);
             setBotWins(0);
-        } catch (e) { setErrorMsg("Ошибка сети"); }
+        } catch { setErrorMsg("Ошибка сети"); }
         setIsLoading(false);
     };
 

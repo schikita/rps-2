@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { getSfxVolume, setSfxVolume, getMusicVolume, setMusicVolume } from "../sounds/useSound";
+import React, { useState, useEffect, useCallback } from "react";
+import { getSfxVolume, setSfxVolume, setMusicVolume } from "../sounds/useSound";
 import type { User } from "../App";
 import { GameScreen } from "./GameScreen";
 import { DailyBonusScreen } from "./DailyBonusScreen";
@@ -16,6 +16,46 @@ interface Skin {
   price: number;
   color: string;
   imageId: string;
+}
+
+interface LeaderboardEntry {
+  id: string | number;
+  username: string;
+  avatar: string;
+  wins: number;
+  points?: number;
+  coins?: number;
+}
+
+interface AchievementData {
+  title: string;
+  description: string;
+  unlocked: boolean;
+  icon: string;
+}
+
+interface MenuButtonProps {
+  title: string;
+  subtitle: string;
+  icon: string;
+  onClick: () => void;
+  isTournament?: boolean;
+}
+
+interface StatCardProps {
+  label: string;
+  value: string | number;
+  color: string;
+  isFullWidth?: boolean;
+  icon: string;
+}
+
+interface AchievementProps {
+  icon: string;
+  unlocked: boolean;
+  title: string;
+  description?: string;
+  onClick: () => void;
 }
 
 const PRESET_AVATARS = [
@@ -37,7 +77,15 @@ interface GameNavigatorProps {
 }
 
 export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, token, refreshUser }) => {
-  const { playSound } = useSound();
+  const { playSound, playMusic, getMusicVolume, isMusicPlaying, updateMusicVolume } = useSound();
+
+  // Handle global background music
+  useEffect(() => {
+    const vol = getMusicVolume();
+    if (vol > 0 && !isMusicPlaying()) {
+      playMusic('bg_music');
+    }
+  }, [getMusicVolume, isMusicPlaying, playMusic]);
 
   const [shopItems, setShopItems] = useState<Skin[]>([]);
   const [sfxVolume, setSfxVolState] = useState(getSfxVolume());
@@ -55,10 +103,10 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
     setModal({ isOpen: true, title, message, type });
   };
 
-  const closeModal = () => {
+  const closeModal = useCallback(() => {
     playSound('click_soft');
     setModal(prev => ({ ...prev, isOpen: false }));
-  };
+  }, [playSound]);
 
   const [equippedSkinId, setEquippedSkinId] = useState<number>(() => {
     if (user.equippedBorderId) return user.equippedBorderId;
@@ -70,9 +118,9 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
   const [navHistory, setNavHistory] = useState<Screen[]>([]);
   const [navContext, setNavContext] = useState<NavContext>("menu");
   const [gameMode, setGameMode] = useState<"bot" | "pvp">("bot");
-  const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [isChangingAvatar, setIsChangingAvatar] = useState(false);
-  const [selectedAchievement, setSelectedAchievement] = useState<any>(null);
+  const [selectedAchievement, setSelectedAchievement] = useState<AchievementData | null>(null);
 
   const isBonusReady = !user.last_claim_date || (new Date().toISOString().split('T')[0] !== user.last_claim_date);
 
@@ -85,6 +133,7 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
 
   useEffect(() => {
     if (user.equippedBorderId !== undefined) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setEquippedSkinId(user.equippedBorderId || DEFAULT_SKIN.id);
     }
   }, [user.equippedBorderId]);
@@ -141,7 +190,7 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [screen, navHistory, modal.isOpen, isChangingAvatar, selectedAchievement]);
+  }, [screen, navHistory, modal.isOpen, isChangingAvatar, selectedAchievement, closeModal, playSound]);
 
   const handleBuy = async (item: Skin) => {
     playSound('click_sharp');
@@ -159,7 +208,7 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
       playSound('success');
       await refreshUser();
       showModal("Успех!", `Вы купили ${item.name}!`, "success");
-    } catch (error) {
+    } catch {
       showModal("Ошибка сети", "Проверьте соединение", "error");
     }
   };
@@ -250,7 +299,7 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
       await refreshUser();
       setIsChangingAvatar(false);
       showModal("Успех!", "Аватар успешно изменен!", "success");
-    } catch (error) {
+    } catch {
       showModal("Ошибка сети", "Проверьте соединение", "error");
     }
   };
@@ -451,8 +500,8 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
               {leaderboard.map((player, idx) => (
                 <div key={player.id} className="menu-card" style={{
                   padding: '12px 16px',
-                  background: player.id === user.id ? `${currentThemeColor}15` : 'rgba(255,255,255,0.03)',
-                  borderColor: player.id === user.id ? currentThemeColor : 'rgba(255,255,255,0.1)',
+                  background: String(player.id) === String(user.id) ? `${currentThemeColor}15` : 'rgba(255,255,255,0.03)',
+                  borderColor: String(player.id) === String(user.id) ? currentThemeColor : 'rgba(255,255,255,0.1)',
                   animationDelay: `${idx * 0.05}s`
                 }}>
                   <div style={{ width: 30, fontWeight: '900', color: idx < 3 ? '#facc15' : '#64748b', fontSize: '1.1rem' }}>
@@ -461,7 +510,7 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
                   <img src={player.avatar} style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${idx < 3 ? '#facc15' : 'transparent'}` }} alt="avatar" />
                   <div style={{ flex: 1, fontWeight: '700', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
                     {player.username}
-                    {player.id === user.id && <span style={{ marginLeft: 8, fontSize: '0.6rem', background: currentThemeColor, color: '#000', padding: '2px 6px', borderRadius: 4, verticalAlign: 'middle' }}>ВЫ</span>}
+                    {String(player.id) === String(user.id) && <span style={{ marginLeft: 8, fontSize: '0.6rem', background: currentThemeColor, color: '#000', padding: '2px 6px', borderRadius: 4, verticalAlign: 'middle' }}>ВЫ</span>}
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ color: '#4ade80', fontWeight: '900', fontSize: '0.9rem' }}>{player.wins} 🏆</div>
@@ -730,6 +779,7 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
                       const val = parseFloat(e.target.value);
                       setMusicVolState(val);
                       setMusicVolume(val);
+                      updateMusicVolume(val);
                     }}
                     style={{ width: '100%', accentColor: currentThemeColor }}
                   />
@@ -848,7 +898,7 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
   );
 };
 
-const MenuButton = ({ title, subtitle, icon, onClick, isTournament }: any) => {
+const MenuButton: React.FC<MenuButtonProps> = ({ title, subtitle, icon, onClick, isTournament }) => {
   const containerClass = isTournament ? "menu-card tournament-card" : "menu-card";
   const { playSound } = useSound();
 
@@ -868,7 +918,7 @@ const MenuButton = ({ title, subtitle, icon, onClick, isTournament }: any) => {
   );
 };
 
-const StatCard = ({ label, value, color, isFullWidth, icon }: any) => (
+const StatCard: React.FC<StatCardProps> = ({ label, value, color, isFullWidth, icon }) => (
   <div className="menu-card" style={{
     flexDirection: 'row',
     alignItems: 'center',
@@ -899,7 +949,7 @@ const StatCard = ({ label, value, color, isFullWidth, icon }: any) => (
   </div>
 );
 
-const Achievement = ({ icon, unlocked, title, onClick }: any) => {
+const Achievement: React.FC<AchievementProps> = ({ icon, unlocked, title, onClick }) => {
   const { playSound } = useSound();
   return (
     <div

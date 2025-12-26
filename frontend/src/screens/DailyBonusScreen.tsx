@@ -20,14 +20,14 @@ export const DailyBonusScreen: React.FC<DailyBonusScreenProps> = ({ user, token,
   const lastClaim = user.last_claim_date || "";
   const isClaimedToday = lastClaim === today;
 
-  let targetIndex = user.streak % 7; 
+  let targetIndex = user.streak % 7;
   if (isClaimedToday && user.streak > 0) {
-      targetIndex = (user.streak - 1) % 7;
+    targetIndex = (user.streak - 1) % 7;
   }
 
   const handleClaim = async (index: number) => {
     if (index !== targetIndex || isClaimedToday || isLoading) return;
-    
+
     setIsLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/daily-bonus`, {
@@ -35,7 +35,7 @@ export const DailyBonusScreen: React.FC<DailyBonusScreenProps> = ({ user, token,
         headers: { "Authorization": `Bearer ${token}` }
       });
       const data = await res.json();
-      
+
       if (res.ok && data.success) {
         await refreshUser();
         // Используем красивый Modal вместо alert
@@ -43,7 +43,7 @@ export const DailyBonusScreen: React.FC<DailyBonusScreenProps> = ({ user, token,
       } else {
         showAlert("Ошибка", data.message || "Не удалось получить бонус", "error");
       }
-    } catch (e) {
+    } catch {
       showAlert("Ошибка сети", "Проверьте интернет соединение", "error");
     }
     setIsLoading(false);
@@ -51,7 +51,7 @@ export const DailyBonusScreen: React.FC<DailyBonusScreenProps> = ({ user, token,
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '0 4px' }}>
-      
+
       <div style={{ display: "flex", alignItems: "center", marginBottom: 20, marginTop: 10 }}>
         <button onClick={onBack} className="back-btn">← Назад</button>
       </div>
@@ -63,14 +63,14 @@ export const DailyBonusScreen: React.FC<DailyBonusScreenProps> = ({ user, token,
         <p style={{ color: '#9ca3af' }}>Нажми на день, чтобы забрать награду!</p>
       </div>
 
-      <div 
+      <div
         className="bonus-grid"
         style={{ '--bonus-theme': themeColor } as React.CSSProperties}
       >
         {REWARDS.map((amount, index) => {
           const dayNumber = index + 1;
           const isBigReward = index === 6;
-          
+
           const isTarget = index === targetIndex;
           const isClaimed = index < targetIndex || (index === targetIndex && isClaimedToday);
           const isActive = isTarget && !isClaimedToday;
@@ -81,13 +81,13 @@ export const DailyBonusScreen: React.FC<DailyBonusScreenProps> = ({ user, token,
           if (isActive) className += " active";
 
           return (
-            <div 
-              key={index} 
+            <div
+              key={index}
               className={className}
               onClick={() => handleClaim(index)}
             >
               <div className="bonus-day-text" style={{ fontSize: '0.8rem', color: '#9ca3af', marginBottom: 4 }}>
-                  {isClaimed ? '✓ ПОЛУЧЕНО' : `ДЕНЬ ${dayNumber}`}
+                {isClaimed ? '✓ ПОЛУЧЕНО' : `ДЕНЬ ${dayNumber}`}
               </div>
               <div style={{ fontSize: isBigReward ? '3rem' : '2rem' }}>
                 {isBigReward ? '🎁' : '💰'}
@@ -102,13 +102,13 @@ export const DailyBonusScreen: React.FC<DailyBonusScreenProps> = ({ user, token,
 
       <div style={{ padding: 20, textAlign: 'center', marginTop: 'auto' }}>
         {isClaimedToday ? (
-            <div style={{color: '#9ca3af', opacity: 0.7}}>
-                Возвращайся завтра за следующей наградой!
-            </div>
+          <div style={{ color: '#9ca3af', opacity: 0.7 }}>
+            Возвращайся завтра за следующей наградой!
+          </div>
         ) : (
-            <div style={{color: themeColor, fontWeight:'bold', animation: 'pulse 1.5s infinite'}}>
-                Нажми на светящуюся ячейку!
-            </div>
+          <div style={{ color: themeColor, fontWeight: 'bold', animation: 'pulse 1.5s infinite' }}>
+            Нажми на светящуюся ячейку!
+          </div>
         )}
       </div>
     </div>

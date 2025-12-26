@@ -381,12 +381,14 @@ button,
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+  position: relative;
+  z-index: 1000;
 }
 
 .game-header-title {
   font-family: 'Bounded', system-ui, sans-serif;
   font-weight: 800;
-  font-size: 1.4rem;
+  font-size: 1.1rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   text-shadow: 0 0 15px currentColor;
@@ -613,6 +615,8 @@ button,
   border-radius: 16px;
   border: 1px solid rgba(255, 255, 255, 0.05);
   margin-bottom: 10px;
+  position: relative;
+  z-index: 1000;
 }
 
 .hud-avatar {
