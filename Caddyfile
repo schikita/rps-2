@@ -1,11 +1,19 @@
 rps-game.ru {
-    # Proxy all backend routes
-    reverse_proxy /api* backend:3000
-    reverse_proxy /auth* backend:3000
-    reverse_proxy /health backend:3000
+    # Backend routes
+    handle /api* {
+        reverse_proxy backend:3000
+    }
+    handle /auth* {
+        reverse_proxy backend:3000
+    }
+    handle /health* {
+        reverse_proxy backend:3000
+    }
 
-    # Everything else to frontend
-    reverse_proxy * cyber-rps:80
+    # Frontend (Everything else)
+    handle {
+        reverse_proxy cyber-rps:80
+    }
 
     log {
         output file /var/log/caddy/access.log
