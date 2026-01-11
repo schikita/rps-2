@@ -34,6 +34,7 @@ services:
     container_name: cyber-rps
     restart: unless-stopped
     ports:
+      - "80:80"
       - "8090:80"
     depends_on:
       - backend
