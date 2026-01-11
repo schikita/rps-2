@@ -8,7 +8,9 @@ const isLocal =
 // Otherwise, detect if we are on the domain or IP.
 const getRemoteApiUrl = () => {
   if (window.location.hostname === "rps-game.ru") {
-    return "http://rps-game.ru:3000";
+    // Use the same domain and protocol (HTTPS) as the current page.
+    // Caddy will proxy /api, /auth, etc. to the backend.
+    return window.location.origin;
   }
   return "http://185.244.50.22:3000";
 };

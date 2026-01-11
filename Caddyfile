@@ -1,6 +1,8 @@
 rps-game.ru {
-    # API requests
+    # Proxy all backend routes
     reverse_proxy /api* backend:3000
+    reverse_proxy /auth* backend:3000
+    reverse_proxy /health backend:3000
 
     # Everything else to frontend
     reverse_proxy * cyber-rps:80
