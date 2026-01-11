@@ -322,22 +322,24 @@ button,
 
 /* BACK BUTTON */
 .back-btn {
-  background: transparent;
-  border: 1px solid transparent;
-  color: #9ca3af;
-  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  padding: 8px 16px;
   border-radius: 99px;
   cursor: pointer;
   font-size: 0.9rem;
+  font-weight: 600;
   display: flex;
   align-items: center;
   width: fit-content;
+  backdrop-filter: blur(4px);
 }
 
 .back-btn:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: translateX(-2px);
 }
 
 /* SHOP BUTTONS */
@@ -659,8 +661,8 @@ button,
 }
 
 .hand-image {
-  width: 60px;
-  max-width: 100px;
+  width: clamp(80px, 15vh, 180px);
+  max-width: 40vw;
   height: auto;
   object-fit: contain;
 }
@@ -933,12 +935,13 @@ button,
 }
 
 .score-panel {
+
   position: fixed;
   /* Fixed to viewport */
   right: 10px;
   top: 50%;
   transform: translateY(-50%);
-  z-index: 50;
+  z-index: 0;
   /* Above game elements but below modals */
   background: rgba(0, 0, 0, 0.3);
   padding: 8px;
@@ -947,13 +950,38 @@ button,
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-@media (max-width: 380px) {
-  .score-panel {
-    right: 4px;
-    padding: 4px;
-    transform: translateY(-50%) scale(0.9);
+.loader {
+  width: 40px;
+  height: 40px;
+  border: 4px solid rgba(255, 255, 255, 0.1);
+  border-top: 4px solid #fff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
   }
 }
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@media (max-width: 380px) {}
 
 @keyframes fadeIn {
   from {

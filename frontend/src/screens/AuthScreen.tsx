@@ -16,8 +16,15 @@ interface AuthScreenProps {
   onLoginSuccess: (userData: unknown, token: string) => void;
 }
 
+declare global {
+  interface Window {
+    Telegram: any;
+  }
+}
+
 export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
   const [isRegistering, setIsRegistering] = useState(false);
+  const [isLoadingTelegram, setIsLoadingTelegram] = useState(false);
 
   const [nickname, setNickname] = useState("");
   const [email, setEmail] = useState("");
@@ -32,6 +39,35 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
     type: "info"
   });
 
+  // Telegram Auto Login
+  React.useEffect(() => {
+    const tg = window.Telegram?.WebApp;
+    if (tg?.initData) {
+      handleTelegramLogin(tg.initData);
+    }
+  }, []);
+
+  const handleTelegramLogin = async (initData: string) => {
+    setIsLoadingTelegram(true);
+    try {
+      const res = await fetch(`${API_URL}/auth/telegram`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ initData }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Telegram Auth failed");
+
+      onLoginSuccess(data.user, data.token);
+    } catch (err: any) {
+      console.error("TG Login Error:", err);
+      // Если авто-логин не удался, просто оставляем пользователя на обычном экране
+    } finally {
+      setIsLoadingTelegram(false);
+    }
+  };
+
   const showModal = (title: string, message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setModal({ isOpen: true, title, message, type });
   };
@@ -44,6 +80,19 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
     e.preventDefault();
 
     const endpoint = isRegistering ? "/auth/register" : "/auth/login";
+
+    // Frontend Validation
+    if (isRegistering) {
+      const nameRegex = /^[a-zA-Z0-9_а-яА-Я]+$/;
+      if (!nameRegex.test(nickname)) {
+        showModal("ОШИБКА ВАЛИДАЦИИ", "Никнейм может содержать только буквы и цифры", "error");
+        return;
+      }
+      if (password.length < 6) {
+        showModal("ОШИБКА ВАЛИДАЦИИ", "Пароль должен быть не менее 6 символов", "error");
+        return;
+      }
+    }
 
     const payload = isRegistering
       ? { nickname, email, password, avatar: selectedAvatar }
@@ -91,64 +140,74 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
 
       <div className="app-content">
         <h1 className="logo-title">CYBER RPS</h1>
-        <p className="logo-subtitle">{isRegistering ? "РЕГИСТРАЦИЯ" : "ВХОД В СИСТЕМУ"}</p>
 
-        <form onSubmit={handleSubmit} className="auth-form">
-          <label className="auth-label">
-            Никнейм
-            <input
-              type="text"
-              value={nickname}
-              onChange={e => setNickname(e.target.value)}
-              className="auth-input"
-              placeholder="Твой никнейм"
-              maxLength={12}
-              required
-            />
-          </label>
+        {isLoadingTelegram ? (
+          <div style={{ textAlign: 'center', marginTop: 40 }}>
+            <div className="loader" style={{ margin: '0 auto 20px' }} />
+            <p className="logo-subtitle" style={{ animation: 'pulse 1.5s infinite' }}>ВХОД ЧЕРЕЗ TELEGRAM...</p>
+          </div>
+        ) : (
+          <>
+            <p className="logo-subtitle">{isRegistering ? "РЕГИСТРАЦИЯ" : "ВХОД В СИСТЕМУ"}</p>
 
-          {isRegistering && (
-            <label className="auth-label">
-              Email
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                className="auth-input"
-                placeholder="Твой email"
-                required
-              />
-            </label>
-          )}
+            <form onSubmit={handleSubmit} className="auth-form">
+              <label className="auth-label">
+                Никнейм
+                <input
+                  type="text"
+                  value={nickname}
+                  onChange={e => setNickname(e.target.value)}
+                  className="auth-input"
+                  placeholder="Твой никнейм"
+                  maxLength={12}
+                  required
+                />
+              </label>
 
-          <label className="auth-label">
-            Пароль
-            <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="auth-input" placeholder="Пароль" required />
-          </label>
-
-          {isRegistering && (
-            <div className="avatar-section">
-              <p className="auth-subtitle" style={{ marginTop: 10 }}>Выберите аватар:</p>
-              <div className="avatar-grid">
-                {PRESET_AVATARS.map((src, i) => (
-                  <img
-                    key={i} src={src}
-                    className={`avatar-option ${selectedAvatar === src ? "avatar-selected" : ""}`}
-                    onClick={() => setSelectedAvatar(src)}
+              {isRegistering && (
+                <label className="auth-label">
+                  Email
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    className="auth-input"
+                    placeholder="Твой email"
+                    required
                   />
-                ))}
-              </div>
-            </div>
-          )}
+                </label>
+              )}
 
-          <button type="submit" className="primary-btn">
-            {isRegistering ? "Создать аккаунт" : "Войти"}
-          </button>
+              <label className="auth-label">
+                Пароль
+                <input type="password" value={password} onChange={e => setPassword(e.target.value)} className="auth-input" placeholder="Пароль" required />
+              </label>
 
-          <p style={{ textAlign: 'center', marginTop: 15, color: '#aaa', cursor: 'pointer', fontSize: '0.9rem' }} onClick={() => setIsRegistering(!isRegistering)}>
-            {isRegistering ? "Уже есть аккаунт? Войти" : "Нет аккаунта? Создать"}
-          </p>
-        </form>
+              {isRegistering && (
+                <div className="avatar-section">
+                  <p className="auth-subtitle" style={{ marginTop: 10 }}>Выберите аватар:</p>
+                  <div className="avatar-grid">
+                    {PRESET_AVATARS.map((src, i) => (
+                      <img
+                        key={i} src={src}
+                        className={`avatar-option ${selectedAvatar === src ? "avatar-selected" : ""}`}
+                        onClick={() => setSelectedAvatar(src)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <button type="submit" className="primary-btn">
+                {isRegistering ? "Создать аккаунт" : "Войти"}
+              </button>
+
+              <p style={{ textAlign: 'center', marginTop: 15, color: '#aaa', cursor: 'pointer', fontSize: '0.9rem' }} onClick={() => setIsRegistering(!isRegistering)}>
+                {isRegistering ? "Уже есть аккаунт? Войти" : "Нет аккаунта? Создать"}
+              </p>
+            </form>
+          </>
+        )}
       </div>
     </div>
   );

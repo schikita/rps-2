@@ -12,10 +12,47 @@ app.use(express.json());
 app.use(cors());
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret";
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const PORT = process.env.PORT || 3000;
 
-// Вспомогательный объект для хранения активных матчей (в памяти для простоты, лучше Redis для продакшена)
+const crypto = require("crypto");
+
+// Проверка данных от Telegram (WebApp.initData)
+function verifyTelegramWebAppData(initData) {
+    if (!TELEGRAM_BOT_TOKEN) {
+        console.warn("⚠️ TELEGRAM_BOT_TOKEN not set in .env! (NOT SECURE)");
+        return true;
+    }
+
+    const urlParams = new URLSearchParams(initData);
+    const hash = urlParams.get('hash');
+    urlParams.delete('hash');
+
+    // Сортировка ключей и сборка строки для проверки
+    const dataCheckString = Array.from(urlParams.entries())
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([key, val]) => `${key}=${val}`)
+        .join('\n');
+
+    const secret = crypto.createHmac('sha256', 'WebAppData').update(TELEGRAM_BOT_TOKEN).digest();
+    const calculatedHash = crypto.createHmac('sha256', secret).update(dataCheckString).digest('hex');
+
+    return calculatedHash === hash;
+}
+
+// Вспомогательный объект для хранения активных матчей
 const activeMatches = new Map();
+
+// Очистка старых сессий матчей каждые 15 минут
+setInterval(() => {
+    const now = Date.now();
+    for (const [userId, match] of activeMatches.entries()) {
+        // Если матч висит более 30 минут — удаляем
+        if (match.createdAt && (now - match.createdAt > 30 * 60 * 1000)) {
+            activeMatches.delete(userId);
+        }
+    }
+}, 15 * 60 * 1000);
 
 // MIDDLEWARE (ПРОВЕРКА ТОКЕНА)
 const authenticateToken = (req, res, next) => {
@@ -41,6 +78,11 @@ app.post("/auth/register", async (req, res) => {
         const { nickname, email, password, avatar } = req.body;
         if (!nickname || !email || !password) return res.status(400).json({ error: "Заполните все поля" });
 
+        // Валидация никнейма (только буквы и цифры)
+        const nameRegex = /^[a-zA-Z0-9_а-яА-Я]+$/;
+        if (!nameRegex.test(nickname)) return res.status(400).json({ error: "Никнейм может содержать только буквы и цифры" });
+        if (password.length < 6) return res.status(400).json({ error: "Пароль должен быть не менее 6 символов" });
+
         const hash = await bcrypt.hash(password, 10);
 
         const newUser = await User.create({
@@ -50,11 +92,65 @@ app.post("/auth/register", async (req, res) => {
             avatar: avatar || "/avatars/skin-1.jpg"
         });
 
-        const token = jwt.sign({ id: newUser.id }, JWT_SECRET);
+        const token = jwt.sign({ id: newUser.id }, JWT_SECRET, { expiresIn: '7d' });
         res.json({ token, user: newUser });
     } catch (e) {
         console.error(e);
         res.status(400).json({ error: "Пользователь уже существует" });
+    }
+});
+
+// АВТОРИЗАЦИЯ: TELEGRAM AUTO-LOGIN
+app.post("/auth/telegram", async (req, res) => {
+    try {
+        const { initData } = req.body;
+        if (!initData) return res.status(400).json({ error: "No initData provided" });
+
+        if (!verifyTelegramWebAppData(initData)) {
+            return res.status(403).json({ error: "Invalid Telegram data" });
+        }
+
+        const params = new URLSearchParams(initData);
+        const userData = JSON.parse(params.get('user'));
+        const tgId = String(userData.id);
+
+        let user = await User.findOne({ where: { telegramId: tgId } });
+
+        // Генерация безопасного email для валидации
+        const safeEmail = `${tgId}@telegram.bot`;
+        const newAvatar = userData.photo_url || "/avatars/skin-1.jpg";
+
+        if (!user) {
+            // Создаем нового пользователя
+            const nickname = userData.username || userData.first_name || `tg_${tgId}`;
+
+            // Проверяем уникальность никнейма
+            let uniqueNickname = nickname;
+            let counter = 1;
+            while (await User.findOne({ where: { username: uniqueNickname } })) {
+                uniqueNickname = `${nickname}_${counter}`;
+                counter++;
+            }
+
+            user = await User.create({
+                username: uniqueNickname,
+                telegramId: tgId,
+                email: safeEmail,
+                avatar: newAvatar
+            });
+        } else {
+            // Обновляем аватар, если он изменился в Telegram
+            if (user.avatar !== newAvatar) {
+                user.avatar = newAvatar;
+                await user.save();
+            }
+        }
+
+        const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
+        res.json({ token, user });
+    } catch (e) {
+        console.error("TG Auth Error:", e);
+        res.status(500).json({ error: "Internal server error during TG auth" });
     }
 });
 
@@ -68,7 +164,7 @@ app.post("/auth/login", async (req, res) => {
             return res.status(400).json({ error: "Неверные учетные данные" });
         }
 
-        const token = jwt.sign({ id: user.id }, JWT_SECRET);
+        const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
         res.json({ token, user });
     } catch (e) {
         res.status(500).json({ error: "Ошибка сервера" });
@@ -90,12 +186,16 @@ app.get("/api/user", authenticateToken, async (req, res) => {
 const DAILY_REWARDS = [50, 100, 150, 200, 250, 300, 1000];
 
 app.post('/api/daily-bonus', authenticateToken, async (req, res) => {
+    const transaction = await sequelize.transaction();
     try {
-        const user = await User.findByPk(req.userId);
-        const today = new Date().toISOString().split('T')[0];
+        const user = await User.findByPk(req.userId, { transaction });
 
-        if (user.lastLoginDate === today) {
-            return res.json({
+        // Use client's local date if provided, otherwise server UTC
+        const today = req.body.localDate || new Date().toISOString().split('T')[0];
+
+        if (user.last_claim_date === today) {
+            await transaction.rollback();
+            return res.status(400).json({
                 success: false,
                 message: "Награда уже получена сегодня",
                 streak: user.loginStreak,
@@ -103,9 +203,13 @@ app.post('/api/daily-bonus', authenticateToken, async (req, res) => {
             });
         }
 
-        const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+        // Check if yesterday (to continue streak)
+        const clientDate = new Date(today);
+        const yesterdayDate = new Date(clientDate);
+        yesterdayDate.setDate(clientDate.getDate() - 1);
+        const yesterday = yesterdayDate.toISOString().split('T')[0];
 
-        if (user.lastLoginDate === yesterday) {
+        if (user.last_claim_date === yesterday) {
             user.loginStreak += 1;
         } else {
             user.loginStreak = 1;
@@ -115,16 +219,20 @@ app.post('/api/daily-bonus', authenticateToken, async (req, res) => {
         const reward = DAILY_REWARDS[rewardIndex];
 
         user.coins += reward;
-        user.lastLoginDate = today;
-        await user.save();
+        user.total_earned += reward;
+        user.last_claim_date = today;
+
+        await user.save({ transaction });
+        await transaction.commit();
 
         res.json({
             success: true,
             reward,
-            coins: user.coins,
-            streak: user.loginStreak
+            streak: user.loginStreak,
+            newBalance: user.coins
         });
     } catch (e) {
+        if (transaction) await transaction.rollback();
         console.error(e);
         res.status(500).json({ error: "Ошибка сервера" });
     }
@@ -214,7 +322,8 @@ app.post("/api/bet/start", authenticateToken, async (req, res) => {
             playerWins: 0,
             botWins: 0,
             mode: "pvp",
-            active: true
+            active: true,
+            createdAt: Date.now()
         });
 
         res.json({ success: true, new_balance: user.coins });
@@ -226,7 +335,7 @@ app.post("/api/bet/start", authenticateToken, async (req, res) => {
 
 // БИТВА: ТРЕНИРОВКА (Начало)
 app.post("/api/match/start-training", authenticateToken, async (req, res) => {
-    activeMatches.set(req.userId, { playerWins: 0, botWins: 0, mode: "bot", active: true });
+    activeMatches.set(req.userId, { playerWins: 0, botWins: 0, mode: "bot", active: true, createdAt: Date.now() });
     res.json({ success: true });
 });
 

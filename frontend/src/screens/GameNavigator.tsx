@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { getSfxVolume, setSfxVolume, setMusicVolume } from "../sounds/useSound";
-import type { User } from "../App";
+// type import removed since unsused in this file now
 import { GameScreen } from "./GameScreen";
 import { DailyBonusScreen } from "./DailyBonusScreen";
 import { API_URL } from "../config";
 import { CustomModal } from "../components/CustomModal";
 import { useSound } from "../sounds/useSound";
+import { useUser } from "../context/UserContext";
 
 type Screen = "menu" | "game" | "shop" | "tournament" | "profile" | "wallet" | "daily" | "leaders";
 type NavContext = "menu" | "game";
@@ -21,6 +22,7 @@ interface Skin {
 interface LeaderboardEntry {
   id: string | number;
   username: string;
+  nickname?: string;
   avatar: string;
   wins: number;
   points?: number;
@@ -69,27 +71,43 @@ const PRESET_AVATARS = [
 
 const DEFAULT_SKIN: Skin = { id: -1, name: "Стандарт", price: 0, color: "#38bdf8", imageId: "default" };
 
-interface GameNavigatorProps {
-  user: User;
-  onLogout: () => void;
-  token: string;
-  refreshUser: () => Promise<void>;
-}
-
-export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, token, refreshUser }) => {
+export const GameNavigator: React.FC = () => {
+  const { user, token, logout, refreshUser } = useUser();
   const { playSound, playMusic, getMusicVolume, isMusicPlaying, updateMusicVolume } = useSound();
 
-  // Handle global background music
+  // Handle global background music (with interaction lock bypass)
   useEffect(() => {
-    const vol = getMusicVolume();
-    if (vol > 0 && !isMusicPlaying()) {
-      playMusic('bg_music');
-    }
+    const startAudio = () => {
+      const vol = getMusicVolume();
+      if (vol > 0 && !isMusicPlaying()) {
+        playMusic('bg_music');
+      }
+    };
+
+    // Try immediate (might fail if not first navigation)
+    startAudio();
+
+    // Also listen for first interaction
+    const handleInteraction = () => {
+      startAudio();
+      window.removeEventListener('click', handleInteraction);
+      window.removeEventListener('touchstart', handleInteraction);
+    };
+
+    window.addEventListener('click', handleInteraction);
+    window.addEventListener('touchstart', handleInteraction);
+
+    return () => {
+      window.removeEventListener('click', handleInteraction);
+      window.removeEventListener('touchstart', handleInteraction);
+    };
   }, [getMusicVolume, isMusicPlaying, playMusic]);
 
   const [shopItems, setShopItems] = useState<Skin[]>([]);
   const [sfxVolume, setSfxVolState] = useState(getSfxVolume());
   const [musicVolume, setMusicVolState] = useState(getMusicVolume());
+
+  if (!user) return null; // Safety check
 
   const userStorageKey = `rps_save_${user.nickname}`;
   const balance = user.points;
@@ -125,15 +143,14 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
   const isBonusReady = !user.last_claim_date || (new Date().toISOString().split('T')[0] !== user.last_claim_date);
 
   // Helper for stack navigation
-  const navigateTo = (target: Screen) => {
+  const navigateTo = useCallback((target: Screen) => {
     playSound('click_soft');
     setNavHistory(prev => [...prev, screen]);
     setScreen(target);
-  };
+  }, [playSound, screen]);
 
   useEffect(() => {
     if (user.equippedBorderId !== undefined) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setEquippedSkinId(user.equippedBorderId || DEFAULT_SKIN.id);
     }
   }, [user.equippedBorderId]);
@@ -149,48 +166,91 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
     localStorage.setItem(userStorageKey, JSON.stringify({ equippedSkinId }));
   }, [equippedSkinId, userStorageKey]);
 
+  const handleBack = useCallback(() => {
+    playSound('click_soft');
+    if (isChangingAvatar) {
+      setIsChangingAvatar(false);
+      return;
+    }
+
+    if (selectedAchievement) {
+      setSelectedAchievement(null);
+      return;
+    }
+
+    if (modal.isOpen) {
+      setModal(prev => ({ ...prev, isOpen: false }));
+      return;
+    }
+
+    // Special case for leaving the game arena
+    if (screen === "game") {
+      setNavContext("menu");
+      setScreen("menu");
+      setNavHistory([]);
+      return;
+    }
+
+    if (navHistory.length > 0) {
+      const lastScreen = navHistory[navHistory.length - 1];
+      setNavHistory(prev => prev.slice(0, -1));
+      setScreen(lastScreen);
+    } else {
+      if (screen !== "menu") {
+        setScreen("menu");
+      }
+    }
+  }, [isChangingAvatar, navHistory, screen, playSound, modal.isOpen, selectedAchievement]);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
-        if (modal.isOpen) {
-          closeModal();
-          return;
-        }
-        if (selectedAchievement) {
-          setSelectedAchievement(null);
-          playSound('click_soft');
-          return;
-        }
-
-        if (isChangingAvatar) {
-          playSound('click_soft');
-          setIsChangingAvatar(false);
-          return;
-        }
-
-        // Custom Stack Back Logic for ESC
-        if (navHistory.length > 0) {
-          playSound('click_soft');
-          const lastScreen = navHistory[navHistory.length - 1];
-          setNavHistory(prev => prev.slice(0, -1));
-          setScreen(lastScreen);
-          return;
-        }
-
-        if (screen === "menu") return;
-
-        playSound('click_soft');
-        if (screen === "game") {
-          setNavContext("menu");
-          setScreen("menu");
-        } else {
-          setScreen("menu");
-        }
+        handleBack();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [screen, navHistory, modal.isOpen, isChangingAvatar, selectedAchievement, closeModal, playSound]);
+  }, [handleBack]);
+
+  // Handle Swipe Back Navigation (Left AND Right sides)
+  useEffect(() => {
+    let touchStartX = 0;
+    let touchStartY = 0;
+    const SWIPE_THRESHOLD = 50;
+    const MAX_VERTICAL_DIFF = 30;
+    const EDGE_ZONE = 80; // Pixels from the edge where swipe must start
+
+    const handleTouchStart = (e: TouchEvent) => {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      const touchEndX = e.changedTouches[0].clientX;
+      const touchEndY = e.changedTouches[0].clientY;
+
+      const diffX = touchEndX - touchStartX;
+      const diffY = Math.abs(touchEndY - touchStartY);
+
+      // 1. Left Edge Swipe (Left-to-Right)
+      const isLeftSwipe = diffX > SWIPE_THRESHOLD && touchStartX < EDGE_ZONE;
+
+      // 2. Right Edge Swipe (Right-to-Left)
+      // Check if swipe moves Left (diffX < -50) AND starts near the right edge
+      const isRightSwipe = diffX < -SWIPE_THRESHOLD && touchStartX > window.innerWidth - EDGE_ZONE;
+
+      if ((isLeftSwipe || isRightSwipe) && diffY < MAX_VERTICAL_DIFF) {
+        handleBack();
+      }
+    };
+
+    window.addEventListener("touchstart", handleTouchStart, { passive: true });
+    window.addEventListener("touchend", handleTouchEnd, { passive: true });
+    return () => {
+      window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [handleBack]);
 
   const handleBuy = async (item: Skin) => {
     playSound('click_sharp');
@@ -217,16 +277,8 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
     playSound('click_main');
     setGameMode(mode);
     setNavContext("game");
-    // When game starts, we push menu to history so back returns to menu
     setNavHistory(prev => [...prev, "menu"]);
     setScreen("game");
-  };
-
-  const exitGame = () => {
-    playSound('click_soft');
-    setNavContext("menu");
-    setScreen("menu");
-    setNavHistory([]); // Clear history involves resetting to main state
   };
 
   const goToAuxiliaryScreen = (target: Screen) => {
@@ -247,25 +299,6 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
 
   const goToTournament = () => {
     navigateTo("tournament");
-  };
-
-  const handleBack = () => {
-    playSound('click_soft');
-    if (isChangingAvatar) {
-      setIsChangingAvatar(false);
-      return;
-    }
-
-    if (navHistory.length > 0) {
-      const lastScreen = navHistory[navHistory.length - 1];
-      setNavHistory(prev => prev.slice(0, -1));
-      setScreen(lastScreen);
-    } else {
-      // Fallback if no history (should happen rarely if used correctly)
-      if (screen !== "menu") {
-        setScreen("menu");
-      }
-    }
   };
 
   const handleEquip = async (id: number) => {
@@ -306,7 +339,7 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
 
   const handleLogout = () => {
     playSound('click_soft');
-    onLogout();
+    logout();
   };
 
   const currentSkin = shopItems.find(i => i.id === equippedSkinId) || DEFAULT_SKIN;
@@ -390,18 +423,18 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
             <p className="logo-subtitle" style={{ marginBottom: 40 }}>HUB SYSTEM</p>
 
             <div style={{ display: 'grid', gap: 14 }}>
-              <MenuButton title="Тренировка" subtitle="Фарм монет" icon="🤖" onClick={() => startGame("bot")} />
-              <MenuButton title="Арена PvP" subtitle="Ставки" icon="⚔️" onClick={() => startGame("pvp")} />
+              <MenuButton title="Тренировка" subtitle="Фарм монет" icon="/images/Training.png" onClick={() => startGame("bot")} />
+              <MenuButton title="Арена PvP" subtitle="Ставки" icon="/images/pvp.png" onClick={() => startGame("pvp")} />
               <MenuButton
                 title="ТОП ИГРОКОВ"
                 subtitle="Зал славы"
-                icon="📊"
+                icon="/images/top.png"
                 onClick={goToLeaderboard}
               />
               <MenuButton
                 title="ТУРНИР"
                 subtitle="Стань абсолютным чемпионом"
-                icon="🏆"
+                icon="/images/turnir.png"
                 onClick={goToTournament}
                 isTournament={true}
               />
@@ -464,10 +497,7 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
 
         {screen === "daily" && (
           <DailyBonusScreen
-            user={user}
-            token={token}
             onBack={handleBack}
-            refreshUser={refreshUser}
             themeColor={currentThemeColor}
             showAlert={showModal}
           />
@@ -476,14 +506,11 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
         {navContext === "game" && (
           <div className="animate-fade-in" style={{ height: '100%', display: screen === "game" ? 'block' : 'none' }}>
             <GameScreen
-              user={user}
               mode={gameMode}
-              balance={balance}
-              token={token}
-              refreshUser={refreshUser}
-              onBack={exitGame}
+              onBack={handleBack}
               onOpenWallet={() => goToAuxiliaryScreen("daily")}
               themeColor={currentThemeColor}
+              isVisible={screen === "game"}
             />
           </div>
         )}
@@ -509,12 +536,12 @@ export const GameNavigator: React.FC<GameNavigatorProps> = ({ user, onLogout, to
                   </div>
                   <img src={player.avatar} style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover', border: `2px solid ${idx < 3 ? '#facc15' : 'transparent'}` }} alt="avatar" />
                   <div style={{ flex: 1, fontWeight: '700', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
-                    {player.username}
+                    {player.nickname || player.username}
                     {String(player.id) === String(user.id) && <span style={{ marginLeft: 8, fontSize: '0.6rem', background: currentThemeColor, color: '#000', padding: '2px 6px', borderRadius: 4, verticalAlign: 'middle' }}>ВЫ</span>}
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ color: '#4ade80', fontWeight: '900', fontSize: '0.9rem' }}>{player.wins} 🏆</div>
-                    <div style={{ color: '#9ca3af', fontSize: '0.7rem' }}>{player.points || player.coins || 0}💰</div>
+                    <div style={{ color: '#9ca3af', fontSize: '0.7rem' }}>{player.points !== undefined ? player.points : (player.coins || 0)} 💰</div>
                   </div>
                 </div>
               ))}
@@ -909,10 +936,16 @@ const MenuButton: React.FC<MenuButtonProps> = ({ title, subtitle, icon, onClick,
 
   return (
     <div className={containerClass} onClick={handleClick}>
-      <span style={{ fontSize: '1.8rem' }}>{icon}</span>
-      <div style={{ flex: 1 }}>
-        <div className={isTournament ? "tournament-text" : "menu-title"}>{title}</div>
-        <div style={{ fontSize: '0.8rem', color: isTournament ? '#facc15' : '#9ca3af', opacity: 0.9 }}>{subtitle}</div>
+      <div style={{ width: '48px', height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginRight: '4px' }}>
+        {icon.startsWith("/") ? (
+          <img src={icon} alt={title} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+        ) : (
+          <span style={{ fontSize: '1.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{icon}</span>
+        )}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div className={isTournament ? "tournament-text" : "menu-title"} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</div>
+        <div style={{ fontSize: '0.8rem', color: isTournament ? '#facc15' : '#9ca3af', opacity: 0.9, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{subtitle}</div>
       </div>
     </div>
   );

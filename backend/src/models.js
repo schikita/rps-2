@@ -33,23 +33,28 @@ if (process.env.DATABASE_URL) {
 // 1. МОДЕЛЬ ПОЛЬЗОВАТЕЛЯ (User)
 const User = sequelize.define('User', {
     username: { type: DataTypes.STRING, unique: true, allowNull: false },
-    email: { type: DataTypes.STRING, unique: true, allowNull: false, validate: { isEmail: true } },
-    password: { type: DataTypes.STRING, allowNull: false },
+    telegramId: { type: DataTypes.STRING, unique: true, allowNull: true },
+    email: { type: DataTypes.STRING, unique: true, allowNull: true, validate: { isEmail: true } },
+    password: { type: DataTypes.STRING, allowNull: true },
     avatar: { type: DataTypes.STRING, defaultValue: "/avatars/skin-1.jpg" },
 
     // ЭКОНОМИКА: Стартовые деньги 1000
-    coins: { type: DataTypes.INTEGER, defaultValue: 1000 },
+    coins: {
+        type: DataTypes.INTEGER,
+        defaultValue: 1000,
+        validate: { min: 0 }
+    },
 
-    lastLoginDate: { type: DataTypes.DATEONLY },
+    last_claim_date: { type: DataTypes.DATEONLY },
     loginStreak: { type: DataTypes.INTEGER, defaultValue: 0 },
 
     equippedAvatarId: { type: DataTypes.INTEGER, allowNull: true },
     equippedBorderId: { type: DataTypes.INTEGER, allowNull: true },
 
     // СТАТИСТИКА
-    wins: { type: DataTypes.INTEGER, defaultValue: 0 },
-    losses: { type: DataTypes.INTEGER, defaultValue: 0 },
-    total_earned: { type: DataTypes.INTEGER, defaultValue: 0 },
+    wins: { type: DataTypes.INTEGER, defaultValue: 0, validate: { min: 0 } },
+    losses: { type: DataTypes.INTEGER, defaultValue: 0, validate: { min: 0 } },
+    total_earned: { type: DataTypes.INTEGER, defaultValue: 0, validate: { min: 0 } },
 
     // БОНУСЫ
     rulesBonusClaimed: { type: DataTypes.BOOLEAN, defaultValue: false }

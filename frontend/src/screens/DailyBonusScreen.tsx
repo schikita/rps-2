@@ -1,25 +1,27 @@
 import React, { useState } from "react";
 import { API_URL } from "../config";
-import type { User } from "../App";
+import { useUser } from "../context/UserContext";
 
 interface DailyBonusScreenProps {
-  user: User;
-  token: string;
   onBack: () => void;
-  refreshUser: () => Promise<void>;
   themeColor: string;
-  showAlert: (title: string, msg: string, type: 'success' | 'error' | 'info') => void; // Новое свойство
+  showAlert: (title: string, msg: string, type: 'success' | 'error' | 'info') => void;
 }
 
 const REWARDS = [50, 100, 150, 200, 250, 300, 1000];
 
-export const DailyBonusScreen: React.FC<DailyBonusScreenProps> = ({ user, token, onBack, refreshUser, themeColor, showAlert }) => {
+export const DailyBonusScreen: React.FC<DailyBonusScreenProps> = ({ onBack, themeColor, showAlert }) => {
+  const { user, token, refreshUser } = useUser();
   const [isLoading, setIsLoading] = useState(false);
+
+  if (!user || !token) return null;
 
   const today = new Date().toISOString().split('T')[0];
   const lastClaim = user.last_claim_date || "";
   const isClaimedToday = lastClaim === today;
 
+  // Streak logic: if we claimed today, we are on (streak-1) reward in the grid visually,
+  // but if we HAVEN'T claimed today, we should be on (streak) reward.
   let targetIndex = user.streak % 7;
   if (isClaimedToday && user.streak > 0) {
     targetIndex = (user.streak - 1) % 7;
@@ -32,13 +34,17 @@ export const DailyBonusScreen: React.FC<DailyBonusScreenProps> = ({ user, token,
     try {
       const res = await fetch(`${API_URL}/api/daily-bonus`, {
         method: "POST",
-        headers: { "Authorization": `Bearer ${token}` }
+        headers: {
+          "Authorization": `Bearer ${token}`,
+          "Content-Type": "application/json"
+        },
+        // We can send local date to help backend if we decide to use it
+        body: JSON.stringify({ localDate: today })
       });
       const data = await res.json();
 
       if (res.ok && data.success) {
         await refreshUser();
-        // Используем красивый Modal вместо alert
         showAlert("Награда получена!", `Вы получили ${data.reward} монет!`, "success");
       } else {
         showAlert("Ошибка", data.message || "Не удалось получить бонус", "error");

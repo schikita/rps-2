@@ -40,7 +40,7 @@ export const useSound = () => {
       if (volume <= 0) return;
 
       const audio = new Audio(SOUND_PATHS[type]);
-      audio.volume = volume * 0.1; // Scale down base volume
+      audio.volume = volume * 0.1; // Scale down base volume (reverted to original)
       audio.play().catch((e) => console.warn("Audio play error:", e));
     } catch (e) {
       console.warn("Audio error:", e);

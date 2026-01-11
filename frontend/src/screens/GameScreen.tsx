@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import type { User } from "../App";
+// type User removed
 import { HandFightAnimation } from "../components/HandFightAnimation";
 import { type Move } from "../engine/rps";
 import { API_URL } from "../config";
@@ -10,21 +10,25 @@ const BOT_AVATAR = "/avatars/skin-6.jpg";
 type Phase = "lobby" | "idle" | "countdown" | "reveal" | "matchOver";
 const BET_OPTIONS = [50, 100, 200, 300, 500, 1000, 2000, 5000];
 
+import { useUser } from "../context/UserContext";
+
 interface GameScreenProps {
-    user: User;
     mode: "bot" | "pvp";
-    balance: number;
-    token: string;
-    refreshUser: () => Promise<void>;
     onBack: () => void;
     onOpenWallet: () => void;
     themeColor: string;
+    isVisible?: boolean;
 }
 
 const BOT = { name: "Кибер-бот", avatar: BOT_AVATAR };
 
-export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, token, refreshUser, onBack, onOpenWallet, themeColor }) => {
+export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWallet, themeColor, isVisible }) => {
+    const { user, token, refreshUser } = useUser();
     const { playSound } = useSound();
+
+    if (!user || !token) return null;
+
+    const balance = user.points;
 
     const [betAmount, setBetAmount] = useState<number>(mode === "bot" ? 0 : 50);
     const [isBetListOpen, setIsBetListOpen] = useState(false);
@@ -246,7 +250,21 @@ export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, tok
             {/* Лобби */}
             {phase === "lobby" && (
                 <div className="lobby-panel">
-                    <div style={{ fontSize: '3rem', marginBottom: 10, textAlign: 'center' }}>{mode === 'bot' ? '🤖' : '⚔️'}</div>
+                    <div style={{ marginBottom: 10, textAlign: 'center' }}>
+                        {mode === 'bot' ? (
+                            <img
+                                src="/images/Training.png"
+                                alt="Training"
+                                style={{ width: '80px', height: '80px', objectFit: 'contain' }}
+                            />
+                        ) : (
+                            <img
+                                src="/images/pvp.png"
+                                alt="PvP"
+                                style={{ width: '120px', height: '120px', objectFit: 'contain' }}
+                            />
+                        )}
+                    </div>
                     {mode === "bot" ? (
                         <>
                             <p className="lobby-title">Тренировка</p>
@@ -306,7 +324,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, tok
                         />
 
                         {/* СЧЕТ ПО ЦЕНТРУ (PORTAL TO SCREEN) */}
-                        {createPortal(
+                        {isVisible && createPortal(
                             <div className="score-panel">
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
                                     <div style={{ color: themeColor, fontSize: '0.7rem', lineHeight: 1 }}>ВЫ</div>
@@ -384,8 +402,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ user, mode, balance, tok
                             {finalProfit > 0 ? `+ ${finalProfit} 💰` : `${finalProfit} 💰`}
                         </div>
 
-                        <button className="primary-btn" onClick={resetToLobby} style={{ '--theme-color': themeColor } as React.CSSProperties}>В лобби</button>
-                        <button className="secondary-btn" style={{ marginTop: 10, width: '100%' }} onClick={onBack}>В меню</button>
+                        <button className="primary-btn" onClick={onBack} style={{ '--theme-color': themeColor, width: '100%' } as React.CSSProperties}>В меню</button>
                     </div>
                 </div>
             )}
