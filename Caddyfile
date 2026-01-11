@@ -1,0 +1,15 @@
+rps-game.ru {
+    # API requests
+    reverse_proxy /api* backend:3000
+
+    # Everything else to frontend
+    reverse_proxy * cyber-rps:80
+
+    log {
+        output file /var/log/caddy/access.log
+    }
+}
+
+:80 {
+    reverse_proxy cyber-rps:80
+}

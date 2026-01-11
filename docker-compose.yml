@@ -24,8 +24,7 @@ services:
       # This matches the user/pass/db defined above
       DATABASE_URL: postgres://rps:rps123@db:5432/rps_game
       JWT_SECRET: super_secret_change_me
-    ports:
-      - "3000:3000"
+    # No direct ports for backend, use Caddy
     depends_on:
       - db
 
@@ -34,7 +33,26 @@ services:
     container_name: cyber-rps
     restart: unless-stopped
     ports:
-      - "80:80"
-      - "8090:80"
+      - "8090:80" # Keep old port for direct access
     depends_on:
       - backend
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: rps_caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - cyber-rps
+      - backend
+
+volumes:
+  caddy_data:
+  caddy_config:
+  pgdata:
