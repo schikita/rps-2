@@ -496,40 +496,58 @@ const pvpMatches = new Map();
 io.on("connection", (socket) => {
     socket.on("join_queue", async (data) => {
         const { userId, token } = data;
+        console.log(`📡 Join Queue attempt: User ${userId}`);
         try {
             const decoded = jwt.verify(token, JWT_SECRET);
-            if (decoded.id !== userId) return;
+            // Use loose equality to handle string/number differences
+            if (String(decoded.id) !== String(userId)) {
+                console.warn(`❌ Auth mismatch: Decoded ${decoded.id} vs Received ${userId}`);
+                return;
+            }
 
-            const existingIdx = pvpQueue.findIndex(p => p.userId === userId);
+            const existingIdx = pvpQueue.findIndex(p => String(p.userId) === String(userId));
             if (existingIdx !== -1) pvpQueue.splice(existingIdx, 1);
 
             const user = await User.findByPk(userId);
-            if (!user) return;
+            if (!user) {
+                console.warn(`❌ User not found in DB: ${userId}`);
+                return;
+            }
 
             const player = { socketId: socket.id, userId, nickname: user.username, avatar: user.avatar };
 
             if (pvpQueue.length > 0) {
                 const opponent = pvpQueue.shift();
+                console.log(`🤝 Match Found! ${player.nickname} vs ${opponent.nickname}`);
                 const roomId = `room_${userId}_${opponent.userId}`;
                 const matchState = { roomId, players: [player, opponent], moves: {}, scores: { [userId]: 0, [opponent.userId]: 0 }, active: true };
                 pvpMatches.set(roomId, matchState);
+
                 socket.join(roomId);
                 const opponentSocket = io.sockets.sockets.get(opponent.socketId);
-                if (opponentSocket) opponentSocket.join(roomId);
-                io.to(roomId).emit("match_found", { roomId, players: matchState.players });
+                if (opponentSocket) {
+                    opponentSocket.join(roomId);
+                    io.to(roomId).emit("match_found", { roomId, players: matchState.players });
+                } else {
+                    console.error(`❌ Opponent socket lost: ${opponent.socketId}`);
+                }
             } else {
                 pvpQueue.push(player);
                 socket.emit("waiting_for_opponent");
             }
-        } catch (e) { }
+        } catch (e) {
+            console.error(`❌ Socket Auth Error for user ${userId}:`, e.message);
+        }
     });
 
     socket.on("submit_move", async (data) => {
         const { roomId, userId, move } = data;
         const match = pvpMatches.get(roomId);
         if (!match || !match.active) return;
-        match.moves[userId] = move;
-        const playerIds = match.players.map(p => p.userId);
+
+        match.moves[String(userId)] = move;
+        const playerIds = match.players.map(p => String(p.userId));
+
         if (Object.keys(match.moves).length === 2) {
             const p1 = playerIds[0], p2 = playerIds[1];
             const m1 = match.moves[p1], m2 = match.moves[p2];
@@ -538,7 +556,7 @@ io.on("connection", (socket) => {
                 if ((m1 === 'rock' && m2 === 'scissors') || (m1 === 'scissors' && m2 === 'paper') || (m1 === 'paper' && m2 === 'rock')) res = p1;
                 else res = p2;
             }
-            if (res !== 'draw') match.scores[res]++;
+            if (res !== 'draw') match.scores[String(res)]++;
             io.to(roomId).emit("round_result", { moves: match.moves, winner: res, scores: match.scores });
             match.moves = {};
             const winnerId = Object.keys(match.scores).find(id => match.scores[id] >= 3);
