@@ -482,7 +482,9 @@ export const GameNavigator: React.FC = () => {
             </div>
 
             <div className="menu-footer">
-              <button className="btn-action-shop" style={{ width: '100%' }} onClick={() => goToAuxiliaryScreen("shop")}><span>🛒</span> Магазин</button>
+              <button className="btn-action-shop" style={{ width: '100%' }} onClick={() => goToAuxiliaryScreen("shop")}>
+                <img src="/images/shop.png" alt="shop" style={{ width: '22px', height: '22px', objectFit: 'contain' }} /> Магазин
+              </button>
             </div>
           </div>
         )}

@@ -494,6 +494,7 @@ const pvpQueue = [];
 const pvpMatches = new Map();
 
 io.on("connection", (socket) => {
+    console.log(`🔌 New socket connection: ${socket.id}`);
     socket.on("join_queue", async (data) => {
         const { userId, token } = data;
         console.log(`📡 Join Queue attempt: User ${userId}`);
