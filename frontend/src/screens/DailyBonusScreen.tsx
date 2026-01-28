@@ -20,11 +20,18 @@ export const DailyBonusScreen: React.FC<DailyBonusScreenProps> = ({ onBack, them
   const lastClaim = user.last_claim_date || "";
   const isClaimedToday = lastClaim === today;
 
-  // Streak logic: if we claimed today, we are on (streak-1) reward in the grid visually,
-  // but if we HAVEN'T claimed today, we should be on (streak) reward.
-  let targetIndex = user.streak % 7;
-  if (isClaimedToday && user.streak > 0) {
-    targetIndex = (user.streak - 1) % 7;
+  // Calculate if the streak is still active (claimed today OR yesterday)
+  const clientDate = new Date(today);
+  const yesterdayDate = new Date(clientDate);
+  yesterdayDate.setDate(clientDate.getDate() - 1);
+  const yesterday = yesterdayDate.toISOString().split('T')[0];
+
+  const isStreakActive = lastClaim === yesterday || isClaimedToday;
+  const currentStreak = isStreakActive ? user.streak : 0;
+
+  let targetIndex = currentStreak % 7;
+  if (isClaimedToday && currentStreak > 0) {
+    targetIndex = (currentStreak - 1) % 7;
   }
 
   const handleClaim = async (index: number) => {
@@ -59,7 +66,7 @@ export const DailyBonusScreen: React.FC<DailyBonusScreenProps> = ({ onBack, them
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '0 4px' }}>
 
       <div style={{ display: "flex", alignItems: "center", marginBottom: 20, marginTop: 10 }}>
-        <button onClick={onBack} className="back-btn">← Назад</button>
+        <button onClick={onBack} className="back-btn">🠸 Назад</button>
       </div>
 
       <div style={{ textAlign: 'center', marginBottom: 20 }}>
@@ -95,9 +102,7 @@ export const DailyBonusScreen: React.FC<DailyBonusScreenProps> = ({ onBack, them
               <div className="bonus-day-text" style={{ fontSize: '0.8rem', color: '#9ca3af', marginBottom: 4 }}>
                 {isClaimed ? '✓ ПОЛУЧЕНО' : `ДЕНЬ ${dayNumber}`}
               </div>
-              <div style={{ fontSize: isBigReward ? '3rem' : '2rem' }}>
-                {isBigReward ? '🎁' : '💰'}
-              </div>
+              {isBigReward ? '🎁' : <img src="/images/coin.png" alt="coin" className="coin-icon" style={{ width: '1.5em', height: '1.5em' }} />}
               <div className="bonus-amount-text" style={{ fontWeight: 'bold', color: '#fff', marginTop: 4 }}>
                 {amount}
               </div>

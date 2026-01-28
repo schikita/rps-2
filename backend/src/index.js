@@ -4,6 +4,8 @@ const path = require("path");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const http = require("http");
+const { Server } = require("socket.io");
 
 const { sequelize, User, Item } = require('./models');
 
@@ -189,22 +191,43 @@ app.post('/api/daily-bonus', authenticateToken, async (req, res) => {
     const transaction = await sequelize.transaction();
     try {
         const user = await User.findByPk(req.userId, { transaction });
-
-        // Use client's local date if provided, otherwise server UTC
-        const today = req.body.localDate || new Date().toISOString().split('T')[0];
-
-        if (user.last_claim_date === today) {
+        if (!user) {
             await transaction.rollback();
-            return res.status(400).json({
-                success: false,
-                message: "Награда уже получена сегодня",
-                streak: user.loginStreak,
-                reward: 0
-            });
+            return res.status(404).json({ error: "Пользователь не найден" });
+        }
+
+        const serverToday = new Date().toISOString().split('T')[0];
+        const clientToday = req.body.localDate || serverToday;
+
+        // Prevent claiming for future dates (max 1 day buffer for timezones)
+        const serverDate = new Date(serverToday);
+        const clientDate = new Date(clientToday);
+        const timeDiff = clientDate.getTime() - serverDate.getTime();
+        const dayDiff = timeDiff / (1000 * 3600 * 24);
+
+        if (dayDiff > 1) {
+            await transaction.rollback();
+            return res.status(400).json({ success: false, message: "Неверная дата (будущее)" });
+        }
+
+        if (user.last_claim_date) {
+            if (user.last_claim_date === clientToday) {
+                await transaction.rollback();
+                return res.status(400).json({
+                    success: false,
+                    message: "Награда уже получена сегодня",
+                    streak: user.loginStreak,
+                    reward: 0
+                });
+            }
+
+            if (user.last_claim_date > clientToday) {
+                await transaction.rollback();
+                return res.status(400).json({ success: false, message: "Неверная дата (прошлое)" });
+            }
         }
 
         // Check if yesterday (to continue streak)
-        const clientDate = new Date(today);
         const yesterdayDate = new Date(clientDate);
         yesterdayDate.setDate(clientDate.getDate() - 1);
         const yesterday = yesterdayDate.toISOString().split('T')[0];
@@ -220,7 +243,7 @@ app.post('/api/daily-bonus', authenticateToken, async (req, res) => {
 
         user.coins += reward;
         user.total_earned += reward;
-        user.last_claim_date = today;
+        user.last_claim_date = clientToday;
 
         await user.save({ transaction });
         await transaction.commit();
@@ -461,21 +484,94 @@ async function seedShop() {
     } catch (e) { console.error("Ошибка создания магазина", e); }
 }
 
-async function startServer() {
-    // ВАЖНО: alter: true обновляет структуру, НЕ удаляя данные
-    await sequelize.sync({ alter: true });
-    await seedShop();
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: { origin: "*" }
+});
 
+// Real-time Matchmaking & Game State
+const pvpQueue = [];
+const pvpMatches = new Map();
 
-    // Serve static files from the React frontend app
-    const distPath = path.join(__dirname, '../../dist');
-    app.use(express.static(distPath));
+io.on("connection", (socket) => {
+    socket.on("join_queue", async (data) => {
+        const { userId, token } = data;
+        try {
+            const decoded = jwt.verify(token, JWT_SECRET);
+            if (decoded.id !== userId) return;
 
-    // Anything that doesn't match the above, send back index.html
-    app.get('*', (req, res) => {
-        res.sendFile(path.join(distPath, 'index.html'));
+            const existingIdx = pvpQueue.findIndex(p => p.userId === userId);
+            if (existingIdx !== -1) pvpQueue.splice(existingIdx, 1);
+
+            const user = await User.findByPk(userId);
+            if (!user) return;
+
+            const player = { socketId: socket.id, userId, nickname: user.username, avatar: user.avatar };
+
+            if (pvpQueue.length > 0) {
+                const opponent = pvpQueue.shift();
+                const roomId = `room_${userId}_${opponent.userId}`;
+                const matchState = { roomId, players: [player, opponent], moves: {}, scores: { [userId]: 0, [opponent.userId]: 0 }, active: true };
+                pvpMatches.set(roomId, matchState);
+                socket.join(roomId);
+                const opponentSocket = io.sockets.sockets.get(opponent.socketId);
+                if (opponentSocket) opponentSocket.join(roomId);
+                io.to(roomId).emit("match_found", { roomId, players: matchState.players });
+            } else {
+                pvpQueue.push(player);
+                socket.emit("waiting_for_opponent");
+            }
+        } catch (e) { }
     });
 
-    app.listen(PORT, () => console.log(`🚀 Сервер запущен на порту ${PORT}`));
+    socket.on("submit_move", async (data) => {
+        const { roomId, userId, move } = data;
+        const match = pvpMatches.get(roomId);
+        if (!match || !match.active) return;
+        match.moves[userId] = move;
+        const playerIds = match.players.map(p => p.userId);
+        if (Object.keys(match.moves).length === 2) {
+            const p1 = playerIds[0], p2 = playerIds[1];
+            const m1 = match.moves[p1], m2 = match.moves[p2];
+            let res = 'draw';
+            if (m1 !== m2) {
+                if ((m1 === 'rock' && m2 === 'scissors') || (m1 === 'scissors' && m2 === 'paper') || (m1 === 'paper' && m2 === 'rock')) res = p1;
+                else res = p2;
+            }
+            if (res !== 'draw') match.scores[res]++;
+            io.to(roomId).emit("round_result", { moves: match.moves, winner: res, scores: match.scores });
+            match.moves = {};
+            const winnerId = Object.keys(match.scores).find(id => match.scores[id] >= 3);
+            if (winnerId) {
+                match.active = false;
+                const loserId = playerIds.find(id => id != winnerId);
+                const winner = await User.findByPk(winnerId), loser = await User.findByPk(loserId);
+                winner.coins += 50; winner.wins += 1; winner.total_earned += 50; loser.losses += 1;
+                await winner.save(); await loser.save();
+                io.to(roomId).emit("match_over", { winnerId, reward: 50 });
+                pvpMatches.delete(roomId);
+            }
+        }
+    });
+
+    socket.on("disconnect", () => {
+        const idx = pvpQueue.findIndex(p => p.socketId === socket.id);
+        if (idx !== -1) pvpQueue.splice(idx, 1);
+        for (const [roomId, match] of pvpMatches.entries()) {
+            if (match.players.find(p => p.socketId === socket.id)) {
+                io.to(roomId).emit("opponent_disconnected");
+                pvpMatches.delete(roomId);
+            }
+        }
+    });
+});
+
+async function startServer() {
+    await sequelize.sync({ alter: true });
+    await seedShop();
+    const distPath = path.join(__dirname, '../../dist');
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => res.sendFile(path.join(distPath, 'index.html')));
+    server.listen(PORT, () => console.log(`🚀 Сервер запущен на порту ${PORT} (Socket.io Enabled)`));
 }
 startServer();

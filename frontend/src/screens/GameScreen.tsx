@@ -1,16 +1,14 @@
 import React, { useRef, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-// type User removed
 import { HandFightAnimation } from "../components/HandFightAnimation";
 import { type Move } from "../engine/rps";
 import { API_URL } from "../config";
 import { useSound } from "../sounds/useSound";
+import { useUser } from "../context/UserContext";
+import { socket } from "../socket";
 
 const BOT_AVATAR = "/avatars/skin-6.jpg";
-type Phase = "lobby" | "idle" | "countdown" | "reveal" | "matchOver";
-const BET_OPTIONS = [50, 100, 200, 300, 500, 1000, 2000, 5000];
-
-import { useUser } from "../context/UserContext";
+type Phase = "lobby" | "matching" | "idle" | "countdown" | "reveal" | "matchOver";
 
 interface GameScreenProps {
     mode: "bot" | "pvp";
@@ -29,77 +27,120 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
     if (!user || !token) return null;
 
     const balance = user.points;
-
-    const [betAmount, setBetAmount] = useState<number>(mode === "bot" ? 0 : 50);
-    const [isBetListOpen, setIsBetListOpen] = useState(false);
-
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
     // Game State
     const [playerMove, setPlayerMove] = useState<Move | null>(null);
-    const [botMove, setBotMove] = useState<Move | null>(null);
+    const [opponentMove, setOpponentMove] = useState<Move | null>(null);
+    const [opponent, setOpponent] = useState<{ nickname: string, avatar: string, id: any } | null>(null);
     const [isLoading, setIsLoading] = useState(false);
-
-    // Match logic & Stats
-    const [finalProfit, setFinalProfit] = useState(0);
     const [phase, setPhase] = useState<Phase>("lobby");
     const [countdown, setCountdown] = useState<number | null>(null);
     const playerMoveRef = useRef<Move | null>(null);
-
     const [playerWins, setPlayerWins] = useState(0);
-    const [botWins, setBotWins] = useState(0);
-
+    const [opponentWins, setOpponentWins] = useState(0);
     const [matchResult, setMatchResult] = useState<"win" | "lose" | "draw" | null>(null);
     const [lastRoundResult, setLastRoundResult] = useState<"win" | "lose" | "draw" | null>(null);
     const [showResultReport, setShowResultReport] = useState(false);
+    const [pvpRoomId, setPvpRoomId] = useState<string | null>(null);
+    const [finalProfit, setFinalProfit] = useState(0);
 
     const timerRef = useRef<number | null>(null);
 
-    // Effect to handle delay for result report
     useEffect(() => {
         if (phase === "matchOver") {
-            const timer = setTimeout(() => {
-                setShowResultReport(true);
-            }, 2000); // 2 seconds delay
+            const timer = setTimeout(() => setShowResultReport(true), 2000);
             return () => clearTimeout(timer);
         } else {
             setShowResultReport(false);
         }
     }, [phase]);
 
-    const isBonusReady = !user.last_claim_date || (new Date().toISOString().split('T')[0] !== user.last_claim_date);
+    useEffect(() => {
+        if (mode === "pvp") {
+            socket.on("match_found", (data) => {
+                const otherPlayer = data.players.find((p: any) => String(p.userId) !== String(user.id));
+                setOpponent({
+                    nickname: otherPlayer.nickname,
+                    avatar: otherPlayer.avatar,
+                    id: otherPlayer.userId
+                });
+                setPvpRoomId(data.roomId);
+                setPhase("idle");
+                playSound('success');
+            });
 
-    const updatePlayerMove = (move: Move | null) => {
-        setPlayerMove(move);
-        playerMoveRef.current = move;
-    };
+            socket.on("round_result", (data) => {
+                // Using a safer way to find opponent's move/id
+                const otherId = Object.keys(data.moves).find(id => String(id) !== String(user.id));
+                const theirMove = data.moves[otherId || ""];
 
-    const clearTimer = () => {
-        if (timerRef.current !== null) {
-            window.clearInterval(timerRef.current);
-            timerRef.current = null;
+                setOpponentMove(theirMove);
+                setPlayerWins(data.scores[user.id]);
+                setOpponentWins(data.scores[otherId || ""]);
+
+                let res: "win" | "lose" | "draw" = "draw";
+                if (String(data.winner) === String(user.id)) res = "win";
+                else if (data.winner === "draw") res = "draw";
+                else res = "lose";
+
+                setLastRoundResult(res);
+                setPhase("reveal");
+
+                setTimeout(() => {
+                    // Check phase because match could have ended
+                    setPhase(current => (current === "reveal" ? "idle" : current));
+                    setPlayerMove(null);
+                    setOpponentMove(null);
+                    setLastRoundResult(null);
+                }, 2000);
+            });
+
+            socket.on("match_over", (data) => {
+                setMatchResult(String(data.winnerId) === String(user.id) ? "win" : "lose");
+                setFinalProfit(data.reward);
+                setPhase("matchOver");
+                refreshUser();
+            });
+
+            socket.on("opponent_disconnected", () => {
+                setPhase(current => {
+                    if (current !== "matchOver") {
+                        setErrorMsg("Оппонент отключился");
+                        setTimeout(() => resetToLobby(), 3000);
+                        return current;
+                    }
+                    return current;
+                });
+            });
+
+            return () => {
+                socket.off("match_found");
+                socket.off("round_result");
+                socket.off("match_over");
+                socket.off("opponent_disconnected");
+            };
         }
-    };
+    }, [mode, user.id, refreshUser, playSound]);
+
+    const isBonusReady = !user.last_claim_date || (new Date().toISOString().split('T')[0] !== user.last_claim_date);
 
     const resetToLobby = () => {
         playSound('click_main');
-        clearTimer();
+        if (timerRef.current) clearInterval(timerRef.current);
         setPhase("lobby");
         setCountdown(null);
-        updatePlayerMove(null);
-        setBotMove(null);
+        setPlayerMove(null);
+        setOpponentMove(null);
         setPlayerWins(0);
-        setBotWins(0);
+        setOpponentWins(0);
         setMatchResult(null);
         setFinalProfit(0);
         setLastRoundResult(null);
-    };
-
-    const selectBet = (amount: number) => {
-        playSound('click_sharp');
-        setBetAmount(amount);
+        setOpponent(null);
+        setPvpRoomId(null);
         setErrorMsg(null);
-        setIsBetListOpen(false);
+        socket.disconnect();
     };
 
     const startArena = async () => {
@@ -114,63 +155,58 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
                 if (res.ok) {
                     setPhase("idle");
                     setPlayerWins(0);
-                    setBotWins(0);
+                    setOpponentWins(0);
                 }
             } catch { setErrorMsg("Ошибка старта"); }
             setIsLoading(false);
             return;
         }
-        if (betAmount <= 0) { setErrorMsg("Ставка > 0"); return; }
-        if (betAmount > balance) { setErrorMsg("Недостаточно средств!"); return; }
+
+        // Online PvP logic
+        // For simplicity, fixed bet or just availability check
+        if (balance < 50) { setErrorMsg("Недостаточно средств (нужно 50)!"); return; }
 
         setIsLoading(true);
-        try {
-            const res = await fetch(`${API_URL}/api/bet/start`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-                body: JSON.stringify({ betAmount }),
-            });
-            const data = await res.json();
-            if (!res.ok) {
-                setErrorMsg(data.error || "Ошибка");
-                setIsLoading(false);
-                return;
-            }
-            await refreshUser();
-            setPhase("idle");
-            setPlayerWins(0);
-            setBotWins(0);
-        } catch { setErrorMsg("Ошибка сети"); }
+        setPhase("matching");
+        socket.connect();
+        socket.emit("join_queue", { userId: user.id, token });
         setIsLoading(false);
     };
 
     const handleMoveClick = (move: Move) => {
         if (phase === "reveal" || phase === "matchOver") return;
+        if (mode === "pvp" && playerMove !== null) return; // Only one move in Online PvP
+
         playSound('click_sharp');
-        updatePlayerMove(move);
-        if (phase === "idle") startCountdown();
+        setPlayerMove(move);
+        playerMoveRef.current = move;
+
+        if (mode === "bot") {
+            if (phase === "idle") startCountdown();
+        } else {
+            if (pvpRoomId) {
+                socket.emit("submit_move", { roomId: pvpRoomId, userId: user.id, move });
+            }
+        }
     };
 
     const startCountdown = () => {
-        clearTimer();
         setPhase("countdown");
-        setBotMove(null);
+        setOpponentMove(null);
         setCountdown(3);
         let current = 3;
         const id = window.setInterval(() => {
             current -= 1;
             setCountdown(current);
             if (current <= 0) {
-                clearTimer();
+                clearInterval(id);
                 playRoundOnServer();
             }
         }, 1000);
-        timerRef.current = id;
     };
 
     const playRoundOnServer = async () => {
         const finalPlayerMove = playerMoveRef.current || "rock";
-
         try {
             const res = await fetch(`${API_URL}/api/match/round`, {
                 method: "POST",
@@ -178,12 +214,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
                 body: JSON.stringify({ playerMove: finalPlayerMove }),
             });
             const data = await res.json();
-            if (!res.ok) throw new Error("Ошибка раунда");
-
-            setBotMove(data.botMove);
-
+            setOpponentMove(data.botMove);
             setPlayerWins(data.playerWins);
-            setBotWins(data.botWins);
+            setOpponentWins(data.botWins);
             setLastRoundResult(data.result);
             setPhase("reveal");
 
@@ -192,16 +225,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
             } else {
                 setTimeout(() => {
                     setPhase("idle");
-                    updatePlayerMove(null);
-                    setBotMove(null);
+                    setPlayerMove(null);
+                    setOpponentMove(null);
                     setLastRoundResult(null);
                 }, 1000);
             }
-
-        } catch (e) {
-            console.error(e);
-            resetToLobby();
-        }
+        } catch { resetToLobby(); }
     };
 
     const finishMatch = async () => {
@@ -211,119 +240,82 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
                 headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` }
             });
             const data = await res.json();
-
-            if (!res.ok) {
-                console.error("Ошибка завершения:", data.error);
-                return;
-            }
-
             if (data.points_change > 0) playSound('success');
-
             setFinalProfit(data.points_change);
             setMatchResult(data.points_change > 0 ? "win" : "lose");
             setPhase("matchOver");
-            await refreshUser();
-
-        } catch (e) { console.error(e); }
+            refreshUser();
+        } catch { }
     };
 
-    const isGameActive = phase !== "lobby";
+    const isGameActive = phase !== "lobby" && phase !== "matching";
 
     return (
         <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            {/* Шапка */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: '0 4px' }}>
-                <button onClick={onBack} className="back-btn">← Назад</button>
-                <span className="game-header-title" style={{ color: mode === 'pvp' ? '#f87171' : '#4ade80' }}>
-                    {mode === 'pvp' ? 'АРЕНА PvP' : 'ТРЕНИРОВКА'}
-                </span>
-                {!isGameActive && (
-                    <div className="wallet-widget menu-card" onClick={onOpenWallet} style={{ borderColor: themeColor, padding: '8px 12px', borderRadius: '999px', gap: 8, margin: 0, position: 'relative' }}>
-                        <span className="coin-icon">💰</span>
-                        <span style={{ color: themeColor, fontWeight: 'bold' }}>{balance}</span>
-                        {isBonusReady && <div className="notification-dot" />}
-                    </div>
-                )}
-                {isGameActive && <div style={{ width: 60 }}></div>}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: '0 4px', height: '44px' }}>
+                <button onClick={onBack} className="back-btn">🠸 Назад</button>
+                <div style={{ flex: 1, textAlign: 'center' }}>
+                    <span className="game-header-title" style={{ color: mode === 'pvp' ? '#f87171' : '#4ade80' }}>
+                        {mode === 'pvp' ? 'АРЕНА ОНЛАЙН' : 'ТРЕНИРОВКА'}
+                    </span>
+                </div>
+                <div style={{ width: '100px', display: 'flex', justifyContent: 'flex-end' }}>
+                    {!isGameActive && phase !== "matching" && (
+                        <div className="wallet-widget menu-card" onClick={onOpenWallet} style={{ borderColor: themeColor, padding: '8px 12px', borderRadius: '999px', gap: 8, margin: 0, position: 'relative' }}>
+                            <img src="/images/coin.png" alt="coin" className="coin-icon" />
+                            <span style={{ color: themeColor, fontWeight: 'bold' }}>{balance}</span>
+                            {isBonusReady && <div className="notification-dot" />}
+                        </div>
+                    )}
+                </div>
             </div>
 
-            {/* Лобби */}
             {phase === "lobby" && (
                 <div className="lobby-panel">
                     <div style={{ marginBottom: 10, textAlign: 'center' }}>
-                        {mode === 'bot' ? (
-                            <img
-                                src="/images/Training.png"
-                                alt="Training"
-                                style={{ width: '80px', height: '80px', objectFit: 'contain' }}
-                            />
-                        ) : (
-                            <img
-                                src="/images/pvp.png"
-                                alt="PvP"
-                                style={{ width: '120px', height: '120px', objectFit: 'contain' }}
-                            />
-                        )}
+                        <img src={mode === 'bot' ? "/images/Training.png" : "/images/pvp.png"} alt="Mode" style={{ width: mode === 'bot' ? '80px' : '120px', height: mode === 'bot' ? '80px' : '120px', objectFit: 'contain' }} />
                     </div>
-                    {mode === "bot" ? (
-                        <>
-                            <p className="lobby-title">Тренировка</p>
-                            <p className="lobby-text">Победа: +15 💰</p>
-                            <button className="primary-btn" onClick={startArena} style={{ '--theme-color': themeColor } as React.CSSProperties}>Начать бой</button>
-                        </>
-                    ) : (
-                        <>
-                            <p className="lobby-title">Ставка</p>
-                            <div className="bet-dropdown-container">
-                                <div className="bet-dropdown-trigger" onClick={() => !isLoading && setIsBetListOpen(!isBetListOpen)} style={{ borderColor: themeColor, opacity: isLoading ? 0.5 : 1 }}>
-                                    <span>{betAmount} 💰</span>
-                                    <span style={{ transform: isBetListOpen ? 'rotate(180deg)' : '0', transition: '0.2s' }}>▼</span>
-                                </div>
-                                {isBetListOpen && !isLoading && (
-                                    <div className="bet-dropdown-menu">
-                                        {BET_OPTIONS.map(amount => (
-                                            <div key={amount} className={`bet-option ${betAmount === amount ? "active" : ""}`} onClick={() => selectBet(amount)}>{amount} 💰</div>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                            {errorMsg && <p className="error-msg">{errorMsg}</p>}
-                            <button className="primary-btn" onClick={startArena} disabled={isLoading} style={{ '--theme-color': themeColor, marginTop: 10 } as React.CSSProperties}>
-                                {isLoading ? "Загрузка..." : "Играть"}
-                            </button>
-                        </>
-                    )}
+                    <p className="lobby-title">{mode === 'bot' ? 'Тренировка' : 'Рейтинговый бой'}</p>
+                    <p className="lobby-text">{mode === 'bot' ? 'Победа: +15' : 'Награда: +50'} <img src="/images/coin.png" alt="coin" className="coin-icon" /></p>
+                    <p className="error-msg" style={{ minHeight: '1.2rem', margin: '4px 0', visibility: errorMsg ? 'visible' : 'hidden' }}>{errorMsg || ' '}</p>
+                    <button className="primary-btn" onClick={startArena} disabled={isLoading} style={{ '--theme-color': themeColor, marginTop: 10 } as React.CSSProperties}>
+                        {isLoading ? "Загрузка..." : mode === 'bot' ? "Начать бой" : "Найти противника"}
+                    </button>
                 </div>
             )}
 
-            {/* Арена */}
-            {phase !== "lobby" && (
-                <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+            {phase === "matching" && (
+                <div className="lobby-panel">
+                    <div className="loader" style={{ borderColor: themeColor, borderTopColor: 'transparent' }}></div>
+                    <p className="lobby-title" style={{ marginTop: 20 }}>Поиск противника...</p>
+                    <p className="lobby-text">Это может занять несколько секунд</p>
+                    <button className="secondary-btn" onClick={resetToLobby} style={{ marginTop: 20 }}>Отмена</button>
+                </div>
+            )}
 
-                    {/* 1. ПРОФИЛЬ ПРОТИВНИКА */}
+            {isGameActive && (
+                <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                     <div className="game-profile-card" style={{ border: '1px solid #f87171', marginBottom: '10px', boxShadow: '0 4px 20px rgba(248, 113, 113, 0.2)' }}>
-                        <img src={BOT.avatar} className="game-profile-avatar" style={{ border: '2px solid #f87171' }} alt="Bot" />
+                        <img src={opponent?.avatar || BOT.avatar} className="game-profile-avatar" style={{ border: '2px solid #f87171' }} alt="Opponent" />
                         <div style={{ flex: 1, minWidth: 0 }}>
-                            <div className="game-profile-name">{BOT.name}</div>
-                            <div className="game-profile-info" style={{ color: '#f87171', opacity: 0.8 }}>Уровень 1</div>
+                            <div className="game-profile-name">{opponent?.nickname || BOT.name}</div>
+                            <div className="game-profile-info" style={{ color: '#f87171', opacity: 0.8 }}>Соперник</div>
                         </div>
                         <div style={{ textAlign: 'right' }}>
-                            <div className="game-profile-score">{botWins}</div>
+                            <div className="game-profile-score">{opponentWins}</div>
                         </div>
                     </div>
 
-                    {/* 2. ПОЛЕ БОЯ */}
                     <div style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                         <HandFightAnimation
                             phase={phase === "idle" ? "idle" : phase === "matchOver" ? "reveal" : phase}
                             countdown={countdown}
                             playerMove={playerMove}
-                            botMove={botMove}
+                            botMove={opponentMove}
                             lastRoundResult={lastRoundResult}
                             showResultOverlay={!showResultReport}
                         />
 
-                        {/* СЧЕТ ПО ЦЕНТРУ (PORTAL TO SCREEN) */}
                         {isVisible && createPortal(
                             <div className="score-panel">
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
@@ -331,7 +323,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
                                     <div style={{ fontWeight: '800', fontSize: '1.5rem', lineHeight: 1, display: 'flex', alignItems: 'center' }}>
                                         <span style={{ color: themeColor }}>{playerWins}</span>
                                         <span style={{ color: '#9ca3af', margin: '0 4px', fontSize: '1rem' }}>:</span>
-                                        <span style={{ color: '#f87171' }}>{botWins}</span>
+                                        <span style={{ color: '#f87171' }}>{opponentWins}</span>
                                     </div>
                                     <div style={{ color: '#f87171', fontSize: '0.7rem', lineHeight: 1 }}>СОПЕРНИК</div>
                                 </div>
@@ -340,11 +332,10 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
                         )}
                     </div>
 
-                    {/* 3. УПРАВЛЕНИЕ */}
                     <div className="moves-row" style={{ marginBottom: 12 }}>
                         {['rock', 'scissors', 'paper'].map((m) => {
                             const isSelected = playerMove === m;
-                            const isDisabled = phase === "reveal" || phase === "matchOver";
+                            const isDisabled = phase === "reveal" || phase === "matchOver" || (mode === "pvp" && playerMove !== null);
                             return (
                                 <button
                                     key={m}
@@ -359,49 +350,29 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
                         })}
                     </div>
 
-                    {/* 4. ВАШ ПРОФИЛЬ (Снизу) */}
                     <div className="game-profile-card" style={{ border: `1px solid ${themeColor}`, boxShadow: `0 4px 20px ${themeColor}20` }}>
                         <img src={user.avatar} className="game-profile-avatar" style={{ border: `2px solid ${themeColor}` }} alt="Me" />
                         <div style={{ flex: 1, minWidth: 0 }}>
                             <div className="game-profile-name">{user.nickname}</div>
-                            <div
-                                onClick={onOpenWallet}
-                                className="game-profile-info"
-                                style={{
-                                    color: '#facc15',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 4,
-                                    cursor: 'pointer',
-                                    width: 'fit-content',
-                                    position: 'relative'
-                                }}
-                                title="Нажмите, чтобы открыть кошелек"
-                            >
-                                <span>💰</span> {balance}
+                            <div onClick={onOpenWallet} className="game-profile-info" style={{ color: '#facc15', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', width: 'fit-content' }}>
+                                <img src="/images/coin.png" alt="coin" className="coin-icon" /> {balance}
                             </div>
                         </div>
                         <div style={{ textAlign: 'right' }}>
                             <div className="game-profile-score">{playerWins}</div>
                         </div>
                     </div>
-
                 </div>
             )}
 
-            {/* Результат */}
             {phase === "matchOver" && showResultReport && (
                 <div className="match-overlay">
                     <div className="match-card" style={{ borderColor: themeColor }}>
-                        <div style={{ fontSize: '4rem', marginBottom: '10px' }}>
-                            {matchResult === "win" ? "🏆" : "💀"}
-                        </div>
+                        <div style={{ fontSize: '4rem', marginBottom: '10px' }}>{matchResult === "win" ? "🏆" : "💀"}</div>
                         <h2 className="match-title">{matchResult === "win" ? "ПОБЕДА!" : "ПОРАЖЕНИЕ"}</h2>
-
                         <div className="match-score" style={{ fontSize: '1.5rem', margin: '15px 0', color: finalProfit >= 0 ? '#4ade80' : '#f87171' }}>
-                            {finalProfit > 0 ? `+ ${finalProfit} 💰` : `${finalProfit} 💰`}
+                            {finalProfit > 0 ? <>{`+ ${finalProfit} `} <img src="/images/coin.png" alt="coin" className="coin-icon" /></> : <>{`${finalProfit} `} <img src="/images/coin.png" alt="coin" className="coin-icon" /></>}
                         </div>
-
                         <button className="primary-btn" onClick={onBack} style={{ '--theme-color': themeColor, width: '100%' } as React.CSSProperties}>В меню</button>
                     </div>
                 </div>

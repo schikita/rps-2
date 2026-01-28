@@ -14,7 +14,7 @@ export const PrivacyPolicyRules: React.FC<PrivacyPolicyRulesProps> = ({ onBack, 
     const contentRef = useRef<HTMLDivElement>(null);
     const [activeTab, setActiveTab] = useState<Tab>('privacy');
     const [bonusLoading, setBonusLoading] = useState(false);
-    const [bonusMessage, setBonusMessage] = useState<string | null>(null);
+    const [bonusMessage, setBonusMessage] = useState<React.ReactNode | null>(null);
 
     // Scroll to top when tab changes
     useEffect(() => {
@@ -70,7 +70,7 @@ export const PrivacyPolicyRules: React.FC<PrivacyPolicyRulesProps> = ({ onBack, 
 
             if (data.success) {
                 playSound('success');
-                setBonusMessage("Бонус +50 получен! 💰");
+                setBonusMessage(<>{`Бонус +50 получен! `} <img src="/images/coin.png" alt="coin" className="coin-icon" /></>);
                 if (refreshUser) refreshUser();
             } else {
                 playSound('click_soft'); // or error sound if available
@@ -107,7 +107,7 @@ export const PrivacyPolicyRules: React.FC<PrivacyPolicyRulesProps> = ({ onBack, 
                     zIndex: 10
                 }}>
                     <button onClick={handleBack} className="back-btn">
-                        ← Назад
+                        🠸 Назад
                     </button>
                     <div style={{ fontFamily: 'Bounded', fontSize: '1rem', textTransform: 'uppercase' }}>
                         {getTitle()}
@@ -312,7 +312,7 @@ export const PrivacyPolicyRules: React.FC<PrivacyPolicyRulesProps> = ({ onBack, 
                                         ) : (
                                             <>
                                                 <span>🎁</span>
-                                                <span>Забрать бонус 50 💰</span>
+                                                <span>Забрать бонус 50 <img src="/images/coin.png" alt="coin" className="coin-icon" /></span>
                                             </>
                                         )}
                                     </button>

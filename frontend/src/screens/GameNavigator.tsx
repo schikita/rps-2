@@ -46,7 +46,7 @@ interface MenuButtonProps {
 
 interface StatCardProps {
   label: string;
-  value: string | number;
+  value: React.ReactNode;
   color: string;
   isFullWidth?: boolean;
   icon: string;
@@ -212,45 +212,73 @@ export const GameNavigator: React.FC = () => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleBack]);
 
-  // Handle Swipe Back Navigation (Left AND Right sides)
+  // Handle Swipe Back Navigation (Left AND Right sides) with visual feedback
+  const [swipeState, setSwipeState] = useState<{
+    startX: number;
+    currentX: number;
+    side: 'left' | 'right' | null;
+    isCommitted: boolean;
+  }>({ startX: 0, currentX: 0, side: null, isCommitted: false });
+
   useEffect(() => {
-    let touchStartX = 0;
+    const SWIPE_THRESHOLD = 80;
+    const EDGE_ZONE = 30; // Native-like edge zone
+    const MAX_VERTICAL_DIFF = 60;
+
     let touchStartY = 0;
-    const SWIPE_THRESHOLD = 50;
-    const MAX_VERTICAL_DIFF = 30;
-    const EDGE_ZONE = 80; // Pixels from the edge where swipe must start
 
     const handleTouchStart = (e: TouchEvent) => {
-      touchStartX = e.touches[0].clientX;
-      touchStartY = e.touches[0].clientY;
-    };
+      const x = e.touches[0].clientX;
+      const y = e.touches[0].clientY;
+      touchStartY = y;
 
-    const handleTouchEnd = (e: TouchEvent) => {
-      const touchEndX = e.changedTouches[0].clientX;
-      const touchEndY = e.changedTouches[0].clientY;
-
-      const diffX = touchEndX - touchStartX;
-      const diffY = Math.abs(touchEndY - touchStartY);
-
-      // 1. Left Edge Swipe (Left-to-Right)
-      const isLeftSwipe = diffX > SWIPE_THRESHOLD && touchStartX < EDGE_ZONE;
-
-      // 2. Right Edge Swipe (Right-to-Left)
-      // Check if swipe moves Left (diffX < -50) AND starts near the right edge
-      const isRightSwipe = diffX < -SWIPE_THRESHOLD && touchStartX > window.innerWidth - EDGE_ZONE;
-
-      if ((isLeftSwipe || isRightSwipe) && diffY < MAX_VERTICAL_DIFF) {
-        handleBack();
+      if (x < EDGE_ZONE) {
+        setSwipeState({ startX: x, currentX: x, side: 'left', isCommitted: false });
+      } else if (x > window.innerWidth - EDGE_ZONE) {
+        setSwipeState({ startX: x, currentX: x, side: 'right', isCommitted: false });
       }
     };
 
+    const handleTouchMove = (e: TouchEvent) => {
+      if (!swipeState.side) return;
+
+      const currentX = e.touches[0].clientX;
+      const currentY = e.touches[0].clientY;
+      const diffY = Math.abs(currentY - touchStartY);
+
+      if (diffY > MAX_VERTICAL_DIFF) {
+        setSwipeState(prev => ({ ...prev, side: null }));
+        return;
+      }
+
+      let diffX = 0;
+      if (swipeState.side === 'left') {
+        diffX = currentX - swipeState.startX;
+      } else {
+        diffX = swipeState.startX - currentX;
+      }
+
+      const isCommitted = diffX > SWIPE_THRESHOLD;
+      setSwipeState(prev => ({ ...prev, currentX, isCommitted }));
+    };
+
+    const handleTouchEnd = () => {
+      if (swipeState.side && swipeState.isCommitted) {
+        handleBack();
+      }
+      setSwipeState({ startX: 0, currentX: 0, side: null, isCommitted: false });
+    };
+
     window.addEventListener("touchstart", handleTouchStart, { passive: true });
+    window.addEventListener("touchmove", handleTouchMove, { passive: true });
     window.addEventListener("touchend", handleTouchEnd, { passive: true });
+
     return () => {
       window.removeEventListener("touchstart", handleTouchStart);
+      window.removeEventListener("touchmove", handleTouchMove);
       window.removeEventListener("touchend", handleTouchEnd);
     };
-  }, [handleBack]);
+  }, [handleBack, swipeState.side, swipeState.startX, swipeState.isCommitted]);
 
   const handleBuy = async (item: Skin) => {
     playSound('click_sharp');
@@ -347,7 +375,7 @@ export const GameNavigator: React.FC = () => {
 
   const shopCardStyle: React.CSSProperties = {
     background: 'rgba(255,255,255,0.05)',
-    padding: 10,
+    paddingTop: 20,
     borderRadius: 12,
     textAlign: 'center',
     display: 'flex',
@@ -378,6 +406,19 @@ export const GameNavigator: React.FC = () => {
       />
 
       <div className="app-content">
+        {swipeState.side && (
+          <div className={`swipe-indicator-container ${swipeState.side}`}>
+            <div
+              className={`swipe-arc ${swipeState.isCommitted ? 'committed' : ''}`}
+              style={{
+                transform: `translateX(${Math.min(0, -40 + (swipeState.side === 'left' ? swipeState.currentX - swipeState.startX : swipeState.startX - swipeState.currentX) * 0.4)}px)`,
+                opacity: Math.min(1, (swipeState.side === 'left' ? swipeState.currentX - swipeState.startX : swipeState.startX - swipeState.currentX) / 100)
+              }}
+            >
+              <div className="swipe-arrow">🠸</div>
+            </div>
+          </div>
+        )}
 
         {screen !== "game" && (
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, marginTop: 10, padding: "0 4px" }}>
@@ -410,7 +451,7 @@ export const GameNavigator: React.FC = () => {
               onClick={() => goToAuxiliaryScreen("daily")}
               style={{ borderColor: currentThemeColor, cursor: 'pointer', padding: '8px 12px', borderRadius: '999px', gap: 8, position: 'relative' }}
             >
-              <span className="coin-icon">💰</span>
+              <img src="/images/coin.png" alt="coin" className="coin-icon" />
               <span style={{ color: currentThemeColor }}>{balance}</span>
               {isBonusReady && <div className="notification-dot" />}
             </div>
@@ -448,7 +489,7 @@ export const GameNavigator: React.FC = () => {
 
         {screen === "shop" && (
           <div className="animate-fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <button onClick={handleBack} className="back-btn">← Назад</button>
+            <button onClick={handleBack} className="back-btn">🠸 Назад</button>
             <h2>Магазин Скинов</h2>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, overflowY: 'auto', paddingBottom: 20 }}>
 
@@ -481,7 +522,7 @@ export const GameNavigator: React.FC = () => {
 
                     <div style={actionContainerStyle}>
                       {!isOwned ? (
-                        <button className="shop-btn shop-btn-buy" onClick={() => handleBuy(item)}>{item.price} 💰</button>
+                        <button className="shop-btn shop-btn-buy" onClick={() => handleBuy(item)}>{item.price} <img src="/images/coin.png" alt="coin" className="coin-icon" /></button>
                       ) : isEquipped ? (
                         <div style={{ fontSize: '0.8rem', color: item.color, fontWeight: 'bold' }}>ВЫБРАНО</div>
                       ) : (
@@ -518,7 +559,7 @@ export const GameNavigator: React.FC = () => {
         {screen === "leaders" && (
           <div className="animate-fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20 }}>
-              <button onClick={handleBack} className="back-btn">← Назад</button>
+              <button onClick={handleBack} className="back-btn">🠸 Назад</button>
               <div style={{ flex: 1, textAlign: 'center', fontFamily: 'Bounded', fontSize: '1.2rem', letterSpacing: '0.1em' }}>ТОП ИГРОКОВ</div>
               <div style={{ width: 60 }}></div>
             </div>
@@ -541,7 +582,6 @@ export const GameNavigator: React.FC = () => {
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ color: '#4ade80', fontWeight: '900', fontSize: '0.9rem' }}>{player.wins} 🏆</div>
-                    <div style={{ color: '#9ca3af', fontSize: '0.7rem' }}>{player.points !== undefined ? player.points : (player.coins || 0)} 💰</div>
                   </div>
                 </div>
               ))}
@@ -552,7 +592,7 @@ export const GameNavigator: React.FC = () => {
         {screen === "tournament" && (
           <div className="animate-fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 25, position: 'relative' }}>
-              <button onClick={handleBack} className="back-btn" style={{ position: 'absolute', left: 0 }}>← Назад</button>
+              <button onClick={handleBack} className="back-btn" style={{ position: 'absolute', left: 0 }}>🠸 Назад</button>
               <div style={{ flex: 1, textAlign: 'center', fontFamily: 'Bounded', fontSize: '1.4rem', letterSpacing: '0.15em' }}>ТУРНИР</div>
             </div>
 
@@ -619,7 +659,7 @@ export const GameNavigator: React.FC = () => {
               <div className="menu-card" style={{ padding: '20px', textAlign: 'center', background: 'rgba(255, 255, 255, 0.02)', borderColor: 'rgba(250, 204, 21, 0.2)' }}>
                 <div style={{ fontSize: '0.75rem', color: '#facc15', fontWeight: 700, marginBottom: 10, letterSpacing: '0.1em' }}>ОБЩИЙ ПРИЗОВОЙ ФОНД</div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-                  <span style={{ fontSize: '1.5rem' }}>💰</span>
+                  <img src="/images/coin.png" alt="coin" className="coin-icon" style={{ width: '1.5rem', height: '1.5rem' }} />
                   <span style={{ fontWeight: 900, fontSize: '1.8rem', color: '#facc15', fontFamily: 'Bounded' }}>5,000</span>
                   <span style={{ color: '#facc15', fontSize: '0.9rem', fontWeight: 700 }}>МОНЕТ</span>
                 </div>
@@ -631,7 +671,7 @@ export const GameNavigator: React.FC = () => {
         {screen === "profile" && (
           <div className="animate-fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20 }}>
-              <button onClick={handleBack} className="back-btn">← Назад</button>
+              <button onClick={handleBack} className="back-btn">🠸 Назад</button>
               <div style={{ flex: 1, textAlign: 'center', fontFamily: 'Bounded', fontSize: '1.2rem', letterSpacing: '0.1em' }}>ПРОФИЛЬ</div>
               <div style={{ width: 60 }}></div>
             </div>
@@ -749,7 +789,7 @@ export const GameNavigator: React.FC = () => {
                 />
                 <StatCard
                   label="ВСЕГО ЗАРАБОТАНО"
-                  value={`${user.total_earned} 💰`}
+                  value={<>{user.total_earned} <img src="/images/coin.png" alt="coin" className="coin-icon" /></>}
                   color="#facc15"
                   isFullWidth={true}
                   icon="💎"
