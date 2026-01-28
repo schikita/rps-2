@@ -1,6 +1,11 @@
 rps-game.ru {
-    # Exclusive matcher for backend paths (Added /socket.io for WebSockets)
-    @backend path /api* /auth* /health* /socket.io*
+    # Matcher for backend services including WebSockets
+    @backend {
+        path /api*
+        path /auth*
+        path /health*
+        path /socket.io*
+    }
     
     handle @backend {
         reverse_proxy backend:3000
