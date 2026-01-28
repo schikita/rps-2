@@ -1,3 +1,4 @@
+
 import React, { useRef, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { HandFightAnimation } from "../components/HandFightAnimation";
@@ -28,6 +29,15 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
 
     const balance = user.points;
     const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+    // Swipe Back (mobile)
+    const rootRef = useRef<HTMLDivElement | null>(null);
+    const swipeRef = useRef({
+        startX: 0,
+        startY: 0,
+        startTs: 0,
+        active: false,
+    });
 
     // Game State
     const [playerMove, setPlayerMove] = useState<Move | null>(null);
@@ -71,7 +81,6 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
             });
 
             socket.on("round_result", (data) => {
-                // Using a safer way to find opponent's move/id
                 const otherId = Object.keys(data.moves).find(id => String(id) !== String(user.id));
                 const theirMove = data.moves[otherId || ""];
 
@@ -88,13 +97,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
                 setPhase("reveal");
 
                 setTimeout(() => {
-                    // Check phase because match could have ended
                     setPhase(current => (current === "reveal" ? "idle" : current));
                     setPlayerMove(null);
                     setOpponentMove(null);
                     setLastRoundResult(null);
                 }, 2000);
             });
+
 
             socket.on("match_over", (data) => {
                 setMatchResult(String(data.winnerId) === String(user.id) ? "win" : "lose");
@@ -123,7 +132,81 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
         }
     }, [mode, user.id, refreshUser, playSound]);
 
+    // Свайп влево в нижней части экрана => onBack()
+    useEffect(() => {
+        const el = rootRef.current;
+        if (!el) return;
+
+        const isProbablyMobile = typeof window !== "undefined" && window.matchMedia
+            ? window.matchMedia("(pointer: coarse)").matches
+            : true;
+
+        if (!isProbablyMobile) return;
+
+        const isInteractiveTarget = (target: EventTarget | null) => {
+            const node = target as HTMLElement | null;
+            if (!node) return false;
+            const tag = (node.tagName || "").toLowerCase();
+            if (tag === "input" || tag === "textarea" || tag === "select" || tag === "button") return true;
+            if (node.isContentEditable) return true;
+            return !!node.closest?.("input,textarea,select,button,[contenteditable='true']");
+        };
+
+        const onTouchStart = (e: TouchEvent) => {
+            if (!e.touches || e.touches.length !== 1) return;
+            if (isInteractiveTarget(e.target)) return;
+
+            const t = e.touches[0];
+            swipeRef.current.startX = t.clientX;
+            swipeRef.current.startY = t.clientY;
+            swipeRef.current.startTs = Date.now();
+            swipeRef.current.active = true;
+        };
+
+        const onTouchEnd = (e: TouchEvent) => {
+            if (!swipeRef.current.active) return;
+            swipeRef.current.active = false;
+
+            if (!e.changedTouches || e.changedTouches.length !== 1) return;
+
+            const t = e.changedTouches[0];
+            const endX = t.clientX;
+            const endY = t.clientY;
+
+            const dx = endX - swipeRef.current.startX;
+            const dy = endY - swipeRef.current.startY;
+            const dt = Date.now() - swipeRef.current.startTs;
+
+            const h = window.innerHeight || 0;
+            const bottomZonePx = Math.min(220, Math.floor(h * 0.35));
+            const isInBottomZone = swipeRef.current.startY >= (h - bottomZonePx);
+
+            // Порог/фильтры жеста
+            const minSwipeX = 80;      // минимум по X (px)
+            const maxSwipeY = 70;      // максимум по Y (px), чтобы не путать со скроллом
+            const maxDuration = 700;   // мс
+
+            const isLeftSwipe = dx <= -minSwipeX;
+            const isMostlyHorizontal = Math.abs(dy) <= maxSwipeY;
+            const isFastEnough = dt <= maxDuration;
+
+            if (isInBottomZone && isLeftSwipe && isMostlyHorizontal && isFastEnough) {
+                onBack();
+            }
+        };
+
+        el.addEventListener("touchstart", onTouchStart, { passive: true });
+        el.addEventListener("touchend", onTouchEnd, { passive: true });
+
+        return () => {
+            el.removeEventListener("touchstart", onTouchStart);
+            el.removeEventListener("touchend", onTouchEnd);
+        };
+    }, [onBack]);
+
     const isBonusReady = !user.last_claim_date || (new Date().toISOString().split('T')[0] !== user.last_claim_date);
+
+
 
     const resetToLobby = () => {
         playSound('click_main');
@@ -162,8 +245,6 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
             return;
         }
 
-        // Online PvP logic
-        // For simplicity, fixed bet or just availability check
         if (balance < 50) { setErrorMsg("Недостаточно средств (нужно 50)!"); return; }
 
         setIsLoading(true);
@@ -175,7 +256,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
 
     const handleMoveClick = (move: Move) => {
         if (phase === "reveal" || phase === "matchOver") return;
-        if (mode === "pvp" && playerMove !== null) return; // Only one move in Online PvP
+        if (mode === "pvp" && playerMove !== null) return;
 
         playSound('click_sharp');
         setPlayerMove(move);
@@ -248,10 +329,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
         } catch { }
     };
 
+
+
     const isGameActive = phase !== "lobby" && phase !== "matching";
 
     return (
-        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <div ref={rootRef} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: '0 4px', height: '44px' }}>
                 <button onClick={onBack} className="back-btn">🠸 Назад</button>
                 <div style={{ flex: 1, textAlign: 'center' }}>
@@ -292,6 +375,9 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
                     <button className="secondary-btn" onClick={resetToLobby} style={{ marginTop: 20 }}>Отмена</button>
                 </div>
             )}
+
+
+
 
             {isGameActive && (
                 <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -349,6 +435,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
                             )
                         })}
                     </div>
+
+
 
                     <div className="game-profile-card" style={{ border: `1px solid ${themeColor}`, boxShadow: `0 4px 20px ${themeColor}20` }}>
                         <img src={user.avatar} className="game-profile-avatar" style={{ border: `2px solid ${themeColor}` }} alt="Me" />
