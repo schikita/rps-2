@@ -1,5 +1,5 @@
 rps-game.ru {
-    # Explicit routing for backend services
+    # Direct routing for backend prefixes (RELIABLE)
     handle /api* {
         reverse_proxy backend:3000
     }
@@ -12,8 +12,8 @@ rps-game.ru {
     handle /socket.io* {
         reverse_proxy backend:3000
     }
-    
-    # Default handling for everything else (frontend)
+
+    # Everything else goes to the frontend
     handle {
         reverse_proxy cyber-rps:80
     }
