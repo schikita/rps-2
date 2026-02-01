@@ -90,10 +90,24 @@ export const useSound = () => {
   }, []);
 
   const updateMusicVolume = useCallback((vol: number) => {
-    if (musicAudio) {
-      musicAudio.volume = vol * 0.8;
+    if (vol <= 0) {
+      // Stop music when volume is 0
+      stopMusic();
+      return;
     }
-  }, []);
+
+    if (musicAudio) {
+      // Update existing audio volume
+      musicAudio.volume = vol * 0.8;
+      // iOS: If music was paused, try to resume it since we have user interaction
+      if (musicAudio.paused) {
+        musicAudio.play().catch(e => console.warn("Music resume error:", e));
+      }
+    } else {
+      // iOS Fix: Music doesn't exist yet, start it now (we have user interaction from slider)
+      playMusic('bg_music');
+    }
+  }, [stopMusic, playMusic]);
 
   return {
     playSound,

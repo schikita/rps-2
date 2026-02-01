@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { getSfxVolume, setSfxVolume, setMusicVolume } from "../sounds/useSound";
 // type import removed since unsused in this file now
 import { GameScreen } from "./GameScreen";
@@ -222,52 +222,74 @@ export const GameNavigator: React.FC = () => {
     isCommitted: boolean;
   }>({ startX: 0, currentX: 0, side: null, isCommitted: false });
 
+  // Use refs to avoid stale closure issues in touch handlers
+  const swipeRef = useRef(swipeState);
+  const handleBackRef = useRef(handleBack);
+
+  useEffect(() => {
+    swipeRef.current = swipeState;
+  }, [swipeState]);
+
+  useEffect(() => {
+    handleBackRef.current = handleBack;
+  }, [handleBack]);
+
   useEffect(() => {
     const SWIPE_THRESHOLD = 80;
     const EDGE_ZONE = 30; // Native-like edge zone
     const MAX_VERTICAL_DIFF = 60;
 
     let touchStartY = 0;
+    let touchStartX = 0;
+    let activeSide: 'left' | 'right' | null = null;
 
     const handleTouchStart = (e: TouchEvent) => {
       const x = e.touches[0].clientX;
       const y = e.touches[0].clientY;
       touchStartY = y;
+      touchStartX = x;
 
       if (x < EDGE_ZONE) {
+        activeSide = 'left';
         setSwipeState({ startX: x, currentX: x, side: 'left', isCommitted: false });
       } else if (x > window.innerWidth - EDGE_ZONE) {
+        activeSide = 'right';
         setSwipeState({ startX: x, currentX: x, side: 'right', isCommitted: false });
+      } else {
+        activeSide = null;
       }
     };
 
     const handleTouchMove = (e: TouchEvent) => {
-      if (!swipeState.side) return;
+      if (!activeSide) return;
 
       const currentX = e.touches[0].clientX;
       const currentY = e.touches[0].clientY;
       const diffY = Math.abs(currentY - touchStartY);
 
       if (diffY > MAX_VERTICAL_DIFF) {
+        activeSide = null;
         setSwipeState(prev => ({ ...prev, side: null }));
         return;
       }
 
       let diffX = 0;
-      if (swipeState.side === 'left') {
-        diffX = currentX - swipeState.startX;
+      if (activeSide === 'left') {
+        diffX = currentX - touchStartX;
       } else {
-        diffX = swipeState.startX - currentX;
+        diffX = touchStartX - currentX;
       }
 
       const isCommitted = diffX > SWIPE_THRESHOLD;
-      setSwipeState(prev => ({ ...prev, currentX, isCommitted }));
+      setSwipeState({ startX: touchStartX, currentX, side: activeSide, isCommitted });
     };
 
     const handleTouchEnd = () => {
-      if (swipeState.side && swipeState.isCommitted) {
-        handleBack();
+      const current = swipeRef.current;
+      if (current.side && current.isCommitted) {
+        handleBackRef.current();
       }
+      activeSide = null;
       setSwipeState({ startX: 0, currentX: 0, side: null, isCommitted: false });
     };
 
@@ -280,7 +302,7 @@ export const GameNavigator: React.FC = () => {
       window.removeEventListener("touchmove", handleTouchMove);
       window.removeEventListener("touchend", handleTouchEnd);
     };
-  }, [handleBack, swipeState.side, swipeState.startX, swipeState.isCommitted]);
+  }, []);
 
   const handleBuy = async (item: Skin) => {
     playSound('click_sharp');
@@ -422,7 +444,7 @@ export const GameNavigator: React.FC = () => {
                 opacity: Math.min(1, (swipeState.side === 'left' ? swipeState.currentX - swipeState.startX : swipeState.startX - swipeState.currentX) / 100)
               }}
             >
-              <div className="swipe-arrow">🠸</div>
+              <div className="swipe-arrow">←</div>
             </div>
           </div>
         )}
@@ -501,7 +523,7 @@ export const GameNavigator: React.FC = () => {
 
         {screen === "shop" && (
           <div className="animate-fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <button onClick={handleBack} className="back-btn">🠸 Назад</button>
+            <button onClick={handleBack} className="back-btn">← Назад</button>
             <h2>Кастомизация</h2>
 
             {/* Category Tabs */}
@@ -627,7 +649,7 @@ export const GameNavigator: React.FC = () => {
         {screen === "leaders" && (
           <div className="animate-fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20 }}>
-              <button onClick={handleBack} className="back-btn">🠸 Назад</button>
+              <button onClick={handleBack} className="back-btn">← Назад</button>
               <div style={{ flex: 1, textAlign: 'center', fontFamily: 'Bounded', fontSize: '1.2rem', letterSpacing: '0.1em' }}>ТОП ИГРОКОВ</div>
               <div style={{ width: 60 }}></div>
             </div>
@@ -660,7 +682,7 @@ export const GameNavigator: React.FC = () => {
         {screen === "tournament" && (
           <div className="animate-fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 25, position: 'relative' }}>
-              <button onClick={handleBack} className="back-btn" style={{ position: 'absolute', left: 0 }}>🠸 Назад</button>
+              <button onClick={handleBack} className="back-btn" style={{ position: 'absolute', left: 0 }}>← Назад</button>
               <div style={{ flex: 1, textAlign: 'center', fontFamily: 'Bounded', fontSize: '1.4rem', letterSpacing: '0.15em' }}>ТУРНИР</div>
             </div>
 
@@ -739,7 +761,7 @@ export const GameNavigator: React.FC = () => {
         {screen === "profile" && (
           <div className="animate-fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20 }}>
-              <button onClick={handleBack} className="back-btn">🠸 Назад</button>
+              <button onClick={handleBack} className="back-btn">← Назад</button>
               <div style={{ flex: 1, textAlign: 'center', fontFamily: 'Bounded', fontSize: '1.2rem', letterSpacing: '0.1em' }}>ПРОФИЛЬ</div>
               <div style={{ width: 60 }}></div>
             </div>
@@ -914,6 +936,22 @@ export const GameNavigator: React.FC = () => {
                       const val = parseFloat(e.target.value);
                       setMusicVolState(val);
                       setMusicVolume(val);
+                      updateMusicVolume(val);
+                    }}
+                    onInput={(e) => {
+                      // iOS: Also handle onInput for real-time updates during drag
+                      const val = parseFloat((e.target as HTMLInputElement).value);
+                      updateMusicVolume(val);
+                    }}
+                    onTouchEnd={(e) => {
+                      // iOS: Ensure audio is triggered on touch end (direct user interaction)
+                      const val = parseFloat((e.target as HTMLInputElement).value);
+                      setMusicVolume(val);
+                      updateMusicVolume(val);
+                    }}
+                    onMouseUp={(e) => {
+                      // Desktop: Apply on mouse up as well
+                      const val = parseFloat((e.target as HTMLInputElement).value);
                       updateMusicVolume(val);
                     }}
                     style={{ width: '100%', accentColor: currentThemeColor }}

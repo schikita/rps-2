@@ -347,7 +347,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
     return (
         <div ref={rootRef} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: '0 4px', height: '44px' }}>
-                <button onClick={onBack} className="back-btn">🠸 Назад</button>
+                <button onClick={onBack} className="back-btn">← Назад</button>
                 <div style={{ flex: 1, textAlign: 'center' }}>
                     <span className="game-header-title" style={{ color: mode === 'pvp' ? '#f87171' : '#4ade80' }}>
                         {mode === 'pvp' ? 'АРЕНА ОНЛАЙН' : 'ТРЕНИРОВКА'}

@@ -107,7 +107,7 @@ export const PrivacyPolicyRules: React.FC<PrivacyPolicyRulesProps> = ({ onBack, 
                     zIndex: 10
                 }}>
                     <button onClick={handleBack} className="back-btn">
-                        🠸 Назад
+                        ← Назад
                     </button>
                     <div style={{ fontFamily: 'Bounded', fontSize: '1rem', textTransform: 'uppercase' }}>
                         {getTitle()}

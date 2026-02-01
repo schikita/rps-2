@@ -45,14 +45,29 @@ export const DailyBonusScreen: React.FC<DailyBonusScreenProps> = ({ onBack, them
   // Streak logic based on user.streak (synced with loginStreak from backend)
   const currentStreak = user.streak || 0;
 
-  // The rewards are index-based: day 1 is index 0, day 7 is index 6.
-  // If we claimed today, we are at currentStreak.
-  // If we haven't claimed today, the next target is currentStreak (since streak resets if we miss a day).
-  const targetIndex = currentStreak % 7;
+  // Calculate which index is currently claimable
+  const getClaimableIndex = (): number => {
+    if (currentStreak === 0) return 0; // Never claimed, Day 1 is active
+
+    // Check if last claim was yesterday
+    const now = new Date();
+    const yesterdayDate = new Date(now);
+    yesterdayDate.setDate(now.getDate() - 1);
+    const yesterdayStr = yesterdayDate.toISOString().split('T')[0];
+
+    if (lastClaim === yesterdayStr) {
+      // Streak continues
+      return currentStreak % 7;
+    } else {
+      // Streak broken, restart from Day 1
+      return 0;
+    }
+  };
 
   const handleClaim = async (index: number) => {
-    // Only allow claiming the NEXT index in the streak if not claimed today
-    if (index !== targetIndex || isClaimedToday || isLoading) return;
+    // Only allow claiming the active index if not claimed today
+    const claimableIndex = getClaimableIndex();
+    if (index !== claimableIndex || isClaimedToday || isLoading) return;
 
     setIsLoading(true);
     try {
@@ -82,7 +97,7 @@ export const DailyBonusScreen: React.FC<DailyBonusScreenProps> = ({ onBack, them
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '0 4px' }}>
 
       <div style={{ display: "flex", alignItems: "center", marginBottom: 20, marginTop: 10 }}>
-        <button onClick={onBack} className="back-btn">🠸 Назад</button>
+        <button onClick={onBack} className="back-btn">← Назад</button>
       </div>
 
       <div style={{ textAlign: 'center', marginBottom: 20 }}>
@@ -100,24 +115,41 @@ export const DailyBonusScreen: React.FC<DailyBonusScreenProps> = ({ onBack, them
           const dayNumber = index + 1;
           const isBigReward = index === 6;
 
-          // If claimed today, then indices 0 to targetIndex-1 were already claimed previously,
-          // and targetIndex was claimed JUST NOW.
-          // If NOT claimed today, then indices 0 to targetIndex-1 were claimed previously.
+          // Calculate which day in the 7-day cycle the user is on
+          // currentStreak = 0 means never claimed, currentStreak = 1 means Day 1 was just claimed, etc.
+          // currentStreak % 7 gives the position in the current cycle (0-6)
 
           let isClaimed = false;
           let isActive = false;
 
-          if (isClaimedToday) {
-            // If we claim on Day 7 (index 6), streak becomes 7. targetIndex becomes 0.
-            // This is tricky. Let's use the actual streak count for clarity.
-            // We show 'claimed' for the last N days of the current 7-day cycle.
-            const cyclePos = ((currentStreak - 1) % 7); // 0 to 6
-            isClaimed = index <= cyclePos;
-            isActive = false;
+          if (currentStreak === 0) {
+            // Never claimed anything - Day 1 is active
+            isActive = index === 0;
+          } else if (isClaimedToday) {
+            // User claimed today - show all days up to and including current position as claimed
+            // If streak is 3 and claimed today, days 1-3 should be "claimed" (indices 0-2)
+            const claimedUpTo = ((currentStreak - 1) % 7); // 0-indexed position of today's claim
+            isClaimed = index <= claimedUpTo;
           } else {
-            const cyclePos = (currentStreak % 7); // 0 to 6
-            isClaimed = index < cyclePos;
-            isActive = index === cyclePos;
+            // User hasn't claimed today - they might have broken their streak
+            // Check if last claim was yesterday (streak continues) or earlier (streak resets)
+            const now = new Date();
+            const yesterdayDate = new Date(now);
+            yesterdayDate.setDate(now.getDate() - 1);
+            const yesterdayStr = yesterdayDate.toISOString().split('T')[0];
+
+            const lastClaimWasYesterday = lastClaim === yesterdayStr;
+
+            if (lastClaimWasYesterday) {
+              // Streak continues - show previous days as claimed, today as active
+              const claimedUpTo = ((currentStreak - 1) % 7); // Last claimed position
+              const activeIndex = currentStreak % 7; // Today's position
+              isClaimed = index <= claimedUpTo;
+              isActive = index === activeIndex;
+            } else {
+              // Streak broken - Day 1 is active, nothing claimed in this cycle
+              isActive = index === 0;
+            }
           }
 
           let className = "bonus-card";
