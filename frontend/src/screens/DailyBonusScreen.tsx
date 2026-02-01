@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { API_URL } from "../config";
 import { useUser } from "../context/UserContext";
 
@@ -13,6 +13,28 @@ const REWARDS = [50, 100, 150, 200, 250, 300, 1000];
 export const DailyBonusScreen: React.FC<DailyBonusScreenProps> = ({ onBack, themeColor, showAlert }) => {
   const { user, token, refreshUser } = useUser();
   const [isLoading, setIsLoading] = useState(false);
+  const [timeLeft, setTimeLeft] = useState<string>("");
+
+  useEffect(() => {
+    const updateCountdown = () => {
+      const now = new Date();
+      // Next day in UTC
+      const nextDay = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1));
+      const diff = nextDay.getTime() - now.getTime();
+
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+      setTimeLeft(
+        `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+      );
+    };
+
+    const timer = setInterval(updateCountdown, 1000);
+    updateCountdown();
+    return () => clearInterval(timer);
+  }, []);
 
   if (!user || !token) return null;
 
@@ -20,21 +42,16 @@ export const DailyBonusScreen: React.FC<DailyBonusScreenProps> = ({ onBack, them
   const lastClaim = user.last_claim_date || "";
   const isClaimedToday = lastClaim === today;
 
-  // Calculate if the streak is still active (claimed today OR yesterday)
-  const clientDate = new Date(today);
-  const yesterdayDate = new Date(clientDate);
-  yesterdayDate.setDate(clientDate.getDate() - 1);
-  const yesterday = yesterdayDate.toISOString().split('T')[0];
+  // Streak logic based on user.streak (synced with loginStreak from backend)
+  const currentStreak = user.streak || 0;
 
-  const isStreakActive = lastClaim === yesterday || isClaimedToday;
-  const currentStreak = isStreakActive ? user.streak : 0;
-
-  let targetIndex = currentStreak % 7;
-  if (isClaimedToday && currentStreak > 0) {
-    targetIndex = (currentStreak - 1) % 7;
-  }
+  // The rewards are index-based: day 1 is index 0, day 7 is index 6.
+  // If we claimed today, we are at currentStreak.
+  // If we haven't claimed today, the next target is currentStreak (since streak resets if we miss a day).
+  const targetIndex = currentStreak % 7;
 
   const handleClaim = async (index: number) => {
+    // Only allow claiming the NEXT index in the streak if not claimed today
     if (index !== targetIndex || isClaimedToday || isLoading) return;
 
     setIsLoading(true);
@@ -45,7 +62,6 @@ export const DailyBonusScreen: React.FC<DailyBonusScreenProps> = ({ onBack, them
           "Authorization": `Bearer ${token}`,
           "Content-Type": "application/json"
         },
-        // We can send local date to help backend if we decide to use it
         body: JSON.stringify({ localDate: today })
       });
       const data = await res.json();
@@ -73,7 +89,7 @@ export const DailyBonusScreen: React.FC<DailyBonusScreenProps> = ({ onBack, them
         <h1 style={{ fontFamily: 'Bounded', fontSize: '2rem', color: themeColor, textShadow: `0 0 10px ${themeColor}80` }}>
           ЕЖЕДНЕВНЫЙ БОНУС
         </h1>
-        <p style={{ color: '#9ca3af' }}>Нажми на день, чтобы забрать награду!</p>
+        <p style={{ color: '#9ca3af' }}>Забирай награду каждый день!</p>
       </div>
 
       <div
@@ -84,9 +100,25 @@ export const DailyBonusScreen: React.FC<DailyBonusScreenProps> = ({ onBack, them
           const dayNumber = index + 1;
           const isBigReward = index === 6;
 
-          const isTarget = index === targetIndex;
-          const isClaimed = index < targetIndex || (index === targetIndex && isClaimedToday);
-          const isActive = isTarget && !isClaimedToday;
+          // If claimed today, then indices 0 to targetIndex-1 were already claimed previously,
+          // and targetIndex was claimed JUST NOW.
+          // If NOT claimed today, then indices 0 to targetIndex-1 were claimed previously.
+
+          let isClaimed = false;
+          let isActive = false;
+
+          if (isClaimedToday) {
+            // If we claim on Day 7 (index 6), streak becomes 7. targetIndex becomes 0.
+            // This is tricky. Let's use the actual streak count for clarity.
+            // We show 'claimed' for the last N days of the current 7-day cycle.
+            const cyclePos = ((currentStreak - 1) % 7); // 0 to 6
+            isClaimed = index <= cyclePos;
+            isActive = false;
+          } else {
+            const cyclePos = (currentStreak % 7); // 0 to 6
+            isClaimed = index < cyclePos;
+            isActive = index === cyclePos;
+          }
 
           let className = "bonus-card";
           if (isBigReward) className += " big-reward";
@@ -113,8 +145,17 @@ export const DailyBonusScreen: React.FC<DailyBonusScreenProps> = ({ onBack, them
 
       <div style={{ padding: 20, textAlign: 'center', marginTop: 'auto' }}>
         {isClaimedToday ? (
-          <div style={{ color: '#9ca3af', opacity: 0.7 }}>
-            Возвращайся завтра за следующей наградой!
+          <div style={{ background: 'rgba(0,0,0,0.3)', padding: '15px', borderRadius: '12px', border: `1px solid ${themeColor}40` }}>
+            <div style={{ color: '#9ca3af', marginBottom: 8, fontSize: '0.9rem' }}>Следующая награда через:</div>
+            <div style={{
+              fontFamily: 'monospace',
+              fontSize: '1.5rem',
+              color: themeColor,
+              fontWeight: 'bold',
+              letterSpacing: '2px'
+            }}>
+              {timeLeft}
+            </div>
           </div>
         ) : (
           <div style={{ color: themeColor, fontWeight: 'bold', animation: 'pulse 1.5s infinite' }}>

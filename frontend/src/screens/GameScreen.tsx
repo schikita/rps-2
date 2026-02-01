@@ -106,28 +106,35 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
 
 
             socket.on("match_over", (data) => {
-                setMatchResult(String(data.winnerId) === String(user.id) ? "win" : "lose");
-                setFinalProfit(data.reward);
+                const isWinner = String(data.winnerId) === String(user.id);
+                setMatchResult(isWinner ? "win" : "lose");
+                // Net profit is +50 if won (100 reward - 50 stake), -50 if lost.
+                setFinalProfit(isWinner ? 50 : -50);
                 setPhase("matchOver");
+                if (data.reason === "opponent_disconnected" && isWinner) {
+                    setErrorMsg("Соперник сбежал! Вы победили техническим нокаутом 🏆");
+                }
                 refreshUser();
             });
 
-            socket.on("opponent_disconnected", () => {
-                setPhase(current => {
-                    if (current !== "matchOver") {
-                        setErrorMsg("Оппонент отключился");
-                        setTimeout(() => resetToLobby(), 3000);
-                        return current;
-                    }
-                    return current;
-                });
+            socket.on("error", (data) => {
+                setErrorMsg(data.message || "Ошибка соединения");
+                setIsLoading(false);
+                setPhase("lobby");
+            });
+
+            socket.on("waiting_for_opponent", () => {
+                // Player is in queue, waiting for match
+                console.log("🎮 In queue, waiting for opponent...");
+                setPhase("matching");
             });
 
             return () => {
                 socket.off("match_found");
                 socket.off("round_result");
                 socket.off("match_over");
-                socket.off("opponent_disconnected");
+                socket.off("error");
+                socket.off("waiting_for_opponent");
             };
         }
     }, [mode, user.id, refreshUser, playSound]);
@@ -249,8 +256,12 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
 
         setIsLoading(true);
         setPhase("matching");
-        socket.connect();
+        if (!socket.connected) socket.connect();
         socket.emit("join_queue", { userId: user.id, token });
+
+        // Immediate refresh to show stake deduction (server deducts when match found, 
+        // but we might want to refresh balance periodically or on specific events)
+        // For now, it will refresh on match_over or manual back.
         setIsLoading(false);
     };
 

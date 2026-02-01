@@ -25,6 +25,8 @@ const mapUser = (data: any): User => {
         last_claim_date: data.last_claim_date || data.lastLoginDate,
         streak: data.loginStreak !== undefined ? data.loginStreak : (data.streak || 0),
         equippedBorderId: data.equippedBorderId || null,
+        equippedBackgroundId: data.equippedBackgroundId || null,
+        equippedHandsId: data.equippedHandsId || null,
         wins: data.wins || 0,
         losses: data.losses || 0,
         total_earned: data.total_earned || 0

@@ -17,6 +17,7 @@ interface Skin {
   price: number;
   color: string;
   imageId: string;
+  type?: 'avatar' | 'border' | 'background' | 'hands' | 'effect';
 }
 
 interface LeaderboardEntry {
@@ -104,6 +105,7 @@ export const GameNavigator: React.FC = () => {
   }, [getMusicVolume, isMusicPlaying, playMusic]);
 
   const [shopItems, setShopItems] = useState<Skin[]>([]);
+  const [shopCategory, setShopCategory] = useState<'border' | 'background' | 'hands'>('border');
   const [sfxVolume, setSfxVolState] = useState(getSfxVolume());
   const [musicVolume, setMusicVolState] = useState(getMusicVolume());
 
@@ -329,15 +331,20 @@ export const GameNavigator: React.FC = () => {
     navigateTo("tournament");
   };
 
-  const handleEquip = async (id: number) => {
+  const handleEquip = async (id: number, itemType?: 'border' | 'background' | 'hands') => {
     playSound('click_sharp');
+    const type = itemType || shopCategory;
     try {
       await fetch(`${API_URL}/api/equip`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-        body: JSON.stringify({ itemId: id }),
+        body: JSON.stringify({ itemId: id, itemType: type }),
       });
-      setEquippedSkinId(id);
+      if (type === 'border') {
+        setEquippedSkinId(id);
+      }
+      await refreshUser();
+      playSound('success');
     } catch (e) {
       console.error("Ошибка экипировки", e);
     }
@@ -481,10 +488,13 @@ export const GameNavigator: React.FC = () => {
               />
             </div>
 
-            <div className="menu-footer">
-              <button className="btn-action-shop" style={{ width: '100%' }} onClick={() => goToAuxiliaryScreen("shop")}>
-                <img src="/images/shop.png" alt="shop" style={{ width: '22px', height: '22px', objectFit: 'contain' }} /> Магазин
-              </button>
+            <div style={{ marginTop: 'auto', paddingTop: 15, marginBottom: 15 }}>
+              <MenuButton
+                title="КАСТОМИЗАЦИЯ"
+                subtitle="Фоны, руки и скины"
+                icon="/images/shop.png"
+                onClick={() => goToAuxiliaryScreen("shop")}
+              />
             </div>
           </div>
         )}
@@ -492,33 +502,81 @@ export const GameNavigator: React.FC = () => {
         {screen === "shop" && (
           <div className="animate-fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <button onClick={handleBack} className="back-btn">🠸 Назад</button>
-            <h2>Магазин Скинов</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, overflowY: 'auto', paddingBottom: 20 }}>
+            <h2>Кастомизация</h2>
 
-              {/* Item Default */}
-              <div style={shopCardStyle}>
-                <div>
-                  <div style={{ width: 40, height: 40, background: DEFAULT_SKIN.color, borderRadius: '50%', margin: '0 auto 10px' }}></div>
-                  <div style={{ fontWeight: 'bold' }}>Стандарт</div>
+            {/* Category Tabs */}
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+              {[
+                { key: 'border' as const, label: '🎨 Скины', icon: '🎨' },
+                { key: 'background' as const, label: '🖼️ Фоны', icon: '🖼️' },
+                { key: 'hands' as const, label: '✋ Руки', icon: '✋' }
+              ].map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setShopCategory(tab.key)}
+                  style={{
+                    flex: 1,
+                    padding: '10px 8px',
+                    borderRadius: 12,
+                    border: shopCategory === tab.key ? '2px solid var(--accent-cyan)' : '1px solid rgba(255,255,255,0.1)',
+                    background: shopCategory === tab.key ? 'rgba(34, 211, 238, 0.15)' : 'rgba(255,255,255,0.05)',
+                    color: shopCategory === tab.key ? 'var(--accent-cyan)' : '#9ca3af',
+                    fontWeight: 600,
+                    fontSize: '0.85rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, overflowY: 'auto', paddingBottom: 20, flex: 1 }}>
+
+              {/* Default item for borders only */}
+              {shopCategory === 'border' && (
+                <div style={shopCardStyle}>
+                  <div>
+                    <div style={{ width: 40, height: 40, background: DEFAULT_SKIN.color, borderRadius: '50%', margin: '0 auto 10px' }}></div>
+                    <div style={{ fontWeight: 'bold' }}>Стандарт</div>
+                  </div>
+                  <div style={actionContainerStyle}>
+                    {equippedSkinId === DEFAULT_SKIN.id ? (
+                      <div style={{ fontSize: '0.8rem', color: DEFAULT_SKIN.color, fontWeight: 'bold' }}>ВЫБРАНО</div>
+                    ) : (
+                      <button className="shop-btn shop-btn-equip" onClick={() => handleEquip(DEFAULT_SKIN.id)} style={{ color: DEFAULT_SKIN.color }}>НАДЕТЬ</button>
+                    )}
+                  </div>
                 </div>
+              )}
 
-                <div style={actionContainerStyle}>
-                  {equippedSkinId === DEFAULT_SKIN.id ? (
-                    <div style={{ fontSize: '0.8rem', color: DEFAULT_SKIN.color, fontWeight: 'bold' }}>ВЫБРАНО</div>
-                  ) : (
-                    <button className="shop-btn shop-btn-equip" onClick={() => handleEquip(DEFAULT_SKIN.id)} style={{ color: DEFAULT_SKIN.color }}>НАДЕТЬ</button>
-                  )}
-                </div>
-              </div>
-
-              {/* Items from Server */}
-              {shopItems.map(item => {
+              {/* Items filtered by category */}
+              {shopItems.filter(item => item.type === shopCategory).map(item => {
                 const isOwned = inventory.includes(item.id);
-                const isEquipped = equippedSkinId === item.id;
+                const isEquipped = shopCategory === 'border'
+                  ? equippedSkinId === item.id
+                  : shopCategory === 'background'
+                    ? user.equippedBackgroundId === item.id
+                    : user.equippedHandsId === item.id;
                 return (
                   <div key={item.id} style={shopCardStyle}>
                     <div>
-                      <div style={{ width: 40, height: 40, background: item.color || '#fff', borderRadius: '50%', margin: '0 auto 10px', boxShadow: `0 0 15px ${item.color}80` }}></div>
+                      <div style={{
+                        width: 40,
+                        height: 40,
+                        background: item.color || '#fff',
+                        borderRadius: shopCategory === 'hands' ? '8px' : '50%',
+                        margin: '0 auto 10px',
+                        boxShadow: `0 0 15px ${item.color}80`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '1.2rem'
+                      }}>
+                        {shopCategory === 'hands' && '✊'}
+                        {shopCategory === 'background' && '🎆'}
+                      </div>
                       <div style={{ fontWeight: 'bold' }}>{item.name}</div>
                     </div>
 
@@ -534,6 +592,14 @@ export const GameNavigator: React.FC = () => {
                   </div>
                 )
               })}
+
+              {/* Empty state */}
+              {shopItems.filter(item => item.type === shopCategory).length === 0 && shopCategory !== 'border' && (
+                <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: 40, color: '#6b7280' }}>
+                  <div style={{ fontSize: '2rem', marginBottom: 8 }}>🔒</div>
+                  <div>Скоро появятся новые предметы!</div>
+                </div>
+              )}
             </div>
           </div>
         )}

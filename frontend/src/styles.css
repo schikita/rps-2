@@ -1128,6 +1128,65 @@ button,
   animation: pulse-dot 2s infinite;
 }
 
+
+/* === SWIPE INDICATORS === */
+.swipe-indicator-container {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  width: 100px;
+  pointer-events: none;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+}
+
+.swipe-indicator-container.left {
+  left: 0;
+  justify-content: flex-start;
+}
+
+.swipe-indicator-container.right {
+  right: 0;
+  justify-content: flex-end;
+}
+
+.swipe-arc {
+  width: 60px;
+  height: 120px;
+  background: radial-gradient(circle at center, rgba(56, 189, 248, 0.4), transparent 70%);
+  border-left: 3px solid rgba(255, 255, 255, 0.5);
+  border-radius: 0 100px 100px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(2px);
+}
+
+.swipe-indicator-container.right .swipe-arc {
+  border-left: none;
+  border-right: 3px solid rgba(255, 255, 255, 0.5);
+  border-radius: 100px 0 0 100px;
+}
+
+.swipe-arc.committed {
+  border-color: #4ade80;
+  background: radial-gradient(circle at center, rgba(74, 222, 128, 0.4), transparent 70%);
+  box-shadow: 0 0 20px rgba(74, 222, 128, 0.4);
+}
+
+.swipe-arrow {
+  color: #fff;
+  font-size: 1.5rem;
+  font-weight: bold;
+  pointer-events: none;
+}
+
+.swipe-indicator-container.right .swipe-arrow {
+  transform: rotate(180deg);
+}
+
 /* === MOBILE OPTIMIZATIONS === */
 @media (max-width: 480px) {
   .logo-title {

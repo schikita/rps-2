@@ -11,6 +11,8 @@ export interface User {
     streak: number;
     loginStreak?: number; // fallback from backend
     equippedBorderId: number | null;
+    equippedBackgroundId: number | null;
+    equippedHandsId: number | null;
     wins: number;
     losses: number;
     total_earned: number;

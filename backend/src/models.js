@@ -5,7 +5,7 @@ require('dotenv').config({ path: path.join(__dirname, '../.env') });
 
 let sequelize;
 
-// ЛОГИКА ПОДКЛЮЧЕНИЯ (Docker vs Локально)
+// ЛОГИКА ПОДКЛЮЧЕНИЯ (Docker vs Локально vs SQLite fall-back)
 if (process.env.DATABASE_URL) {
     console.log("🔌 Подключение через DATABASE_URL (Docker)...");
     sequelize = new Sequelize(process.env.DATABASE_URL, {
@@ -15,8 +15,8 @@ if (process.env.DATABASE_URL) {
             ssl: process.env.DB_SSL === 'true' ? { require: true, rejectUnauthorized: false } : false
         }
     });
-} else {
-    console.log("💻 Подключение через переменные (Локально)...");
+} else if (process.env.DB_HOST) {
+    console.log("💻 Подключение через переменные (Локально Postgres)...");
     sequelize = new Sequelize(
         process.env.DB_NAME || 'rps_game',
         process.env.DB_USER || 'postgres',
@@ -28,6 +28,13 @@ if (process.env.DATABASE_URL) {
             logging: false
         }
     );
+} else {
+    console.log("📂 Использование SQLite для локальной разработки...");
+    sequelize = new Sequelize({
+        dialect: 'sqlite',
+        storage: path.join(__dirname, '../database.sqlite'),
+        logging: false
+    });
 }
 
 // 1. МОДЕЛЬ ПОЛЬЗОВАТЕЛЯ (User)
@@ -50,6 +57,8 @@ const User = sequelize.define('User', {
 
     equippedAvatarId: { type: DataTypes.INTEGER, allowNull: true },
     equippedBorderId: { type: DataTypes.INTEGER, allowNull: true },
+    equippedBackgroundId: { type: DataTypes.INTEGER, allowNull: true },
+    equippedHandsId: { type: DataTypes.INTEGER, allowNull: true },
 
     // СТАТИСТИКА
     wins: { type: DataTypes.INTEGER, defaultValue: 0, validate: { min: 0 } },
@@ -66,7 +75,7 @@ const Item = sequelize.define('Item', {
     price: { type: DataTypes.INTEGER, allowNull: false },
     imageId: { type: DataTypes.STRING, allowNull: false }, // Идентификатор стиля (например, 'neon_green')
     color: { type: DataTypes.STRING, defaultValue: "#ffffff" }, // Цвет для фронтенда
-    type: { type: DataTypes.ENUM('avatar', 'border', 'effect'), allowNull: false },
+    type: { type: DataTypes.ENUM('avatar', 'border', 'background', 'hands', 'effect'), allowNull: false },
 });
 
 // 3. СВЯЗЬ ПОЛЬЗОВАТЕЛЬ-ПРЕДМЕТЫ (Инвентарь)

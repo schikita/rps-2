@@ -199,6 +199,8 @@ app.post('/api/daily-bonus', authenticateToken, async (req, res) => {
         const serverToday = new Date().toISOString().split('T')[0];
         const clientToday = req.body.localDate || serverToday;
 
+        console.log(`[DailyBonus] User: ${user.username}, Last Claim: ${user.last_claim_date}, Client Today: ${clientToday}, Server Today: ${serverToday}`);
+
         // Prevent claiming for future dates (max 1 day buffer for timezones)
         const serverDate = new Date(serverToday);
         const clientDate = new Date(clientToday);
@@ -206,12 +208,15 @@ app.post('/api/daily-bonus', authenticateToken, async (req, res) => {
         const dayDiff = timeDiff / (1000 * 3600 * 24);
 
         if (dayDiff > 1) {
+            console.warn(`[DailyBonus] Future date blocked: client=${clientToday}, server=${serverToday}`);
             await transaction.rollback();
             return res.status(400).json({ success: false, message: "Неверная дата (будущее)" });
         }
 
         if (user.last_claim_date) {
-            if (user.last_claim_date === clientToday) {
+            const lastClaimStr = String(user.last_claim_date);
+            if (lastClaimStr === clientToday) {
+                console.log(`[DailyBonus] Already claimed today: ${clientToday}`);
                 await transaction.rollback();
                 return res.status(400).json({
                     success: false,
@@ -221,7 +226,8 @@ app.post('/api/daily-bonus', authenticateToken, async (req, res) => {
                 });
             }
 
-            if (user.last_claim_date > clientToday) {
+            if (lastClaimStr > clientToday) {
+                console.warn(`[DailyBonus] Past date claim attempt blocked: last=${lastClaimStr}, client=${clientToday}`);
                 await transaction.rollback();
                 return res.status(400).json({ success: false, message: "Неверная дата (прошлое)" });
             }
@@ -232,11 +238,13 @@ app.post('/api/daily-bonus', authenticateToken, async (req, res) => {
         yesterdayDate.setDate(clientDate.getDate() - 1);
         const yesterday = yesterdayDate.toISOString().split('T')[0];
 
-        if (user.last_claim_date === yesterday) {
+        const oldStreak = user.loginStreak;
+        if (String(user.last_claim_date) === yesterday) {
             user.loginStreak += 1;
         } else {
             user.loginStreak = 1;
         }
+        console.log(`[DailyBonus] Streak updated: ${oldStreak} -> ${user.loginStreak} (Yesterday was: ${yesterday})`);
 
         const rewardIndex = (user.loginStreak - 1) % 7;
         const reward = DAILY_REWARDS[rewardIndex];
@@ -247,6 +255,8 @@ app.post('/api/daily-bonus', authenticateToken, async (req, res) => {
 
         await user.save({ transaction });
         await transaction.commit();
+
+        console.log(`[DailyBonus] SUCCESS: User ${user.username} claimed ${reward}, new balance: ${user.coins}`);
 
         res.json({
             success: true,
@@ -425,23 +435,39 @@ app.post("/api/match/end", authenticateToken, async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Ошибка сервера" }); }
 });
 
-// ЭКИПИРОВКА ПРЕДМЕТА
+// ЭКИПИРОВКА ПРЕДМЕТА (Универсальная)
 app.post('/api/equip', authenticateToken, async (req, res) => {
-    const { itemId } = req.body;
+    const { itemId, itemType } = req.body;
     try {
         const user = await User.findByPk(req.userId);
-        if (itemId !== -1) {
-            const item = await Item.findByPk(itemId);
-            if (!item) return res.status(404).json({ error: "Предмет не найден" });
-            const hasItem = await user.hasItem(item);
-            if (!hasItem) return res.status(403).json({ error: "Предмет не куплен" });
-            user.equippedBorderId = itemId;
-        } else {
-            user.equippedBorderId = null;
+        if (!user) return res.status(404).json({ error: "Пользователь не найден" });
+
+        // Unequip (itemId === -1 or null)
+        if (itemId === -1 || itemId === null) {
+            if (itemType === 'border') user.equippedBorderId = null;
+            else if (itemType === 'background') user.equippedBackgroundId = null;
+            else if (itemType === 'hands') user.equippedHandsId = null;
+            await user.save();
+            return res.json({ success: true });
         }
+
+        const item = await Item.findByPk(itemId);
+        if (!item) return res.status(404).json({ error: "Предмет не найден" });
+
+        const hasItem = await user.hasItem(item);
+        if (!hasItem) return res.status(403).json({ error: "Предмет не куплен" });
+
+        // Equip based on item type
+        if (item.type === 'border') user.equippedBorderId = itemId;
+        else if (item.type === 'background') user.equippedBackgroundId = itemId;
+        else if (item.type === 'hands') user.equippedHandsId = itemId;
+
         await user.save();
-        res.json({ success: true });
-    } catch (e) { res.status(500).json({ error: "Ошибка сервера" }); }
+        res.json({ success: true, equipped: { type: item.type, id: itemId } });
+    } catch (e) {
+        console.error("Equip error:", e);
+        res.status(500).json({ error: "Ошибка сервера" });
+    }
 });
 
 // ОБНОВЛЕНИЕ АВАТАРА
@@ -475,9 +501,22 @@ async function seedShop() {
         if (count === 0) {
             console.log("🛒 Создание Магазина...");
             await Item.bulkCreate([
-                { name: "Кислота (Acid)", price: 500, type: "border", imageId: "neon_green", color: "#22c55e" },
-                { name: "Магнат (Gold)", price: 2000, type: "border", imageId: "gold_rush", color: "#facc15" },
-                { name: "Киберпанк (Cyber)", price: 5000, type: "border", imageId: "cyber_punk", color: "#ec4899" }
+                // BORDERS (Скины/Рамки)
+                { name: "Кислота", price: 500, type: "border", imageId: "neon_green", color: "#22c55e" },
+                { name: "Магнат", price: 2000, type: "border", imageId: "gold_rush", color: "#facc15" },
+                { name: "Киберпанк", price: 5000, type: "border", imageId: "cyber_punk", color: "#ec4899" },
+
+                // BACKGROUNDS (Фоны)
+                { name: "Неон", price: 500, type: "background", imageId: "bg_neon", color: "#22d3ee" },
+                { name: "Закат", price: 800, type: "background", imageId: "bg_sunset", color: "#f97316" },
+                { name: "Космос", price: 1200, type: "background", imageId: "bg_space", color: "#8b5cf6" },
+                { name: "Матрица", price: 1500, type: "background", imageId: "bg_matrix", color: "#10b981" },
+
+                // HANDS (Руки)
+                { name: "Робот", price: 750, type: "hands", imageId: "hands_robot", color: "#94a3b8" },
+                { name: "Скелет", price: 600, type: "hands", imageId: "hands_skeleton", color: "#f5f5f4" },
+                { name: "Золото", price: 1500, type: "hands", imageId: "hands_gold", color: "#fbbf24" },
+                { name: "Лава", price: 2000, type: "hands", imageId: "hands_lava", color: "#ef4444" }
             ]);
             console.log("✅ Магазин Готов!");
         }
@@ -506,6 +545,12 @@ io.on("connection", (socket) => {
                 return;
             }
 
+            const match = activeMatches.get(userId);
+            if (match && match.active) {
+                socket.emit("error", { message: "Завершите текущую тренировку перед боем PvP" });
+                return;
+            }
+
             const existingIdx = pvpQueue.findIndex(p => String(p.userId) === String(userId));
             if (existingIdx !== -1) pvpQueue.splice(existingIdx, 1);
 
@@ -520,21 +565,53 @@ io.on("connection", (socket) => {
             if (pvpQueue.length > 0) {
                 const opponent = pvpQueue.shift();
                 console.log(`🤝 Match Found! ${player.nickname} vs ${opponent.nickname}`);
-                const roomId = `room_${userId}_${opponent.userId}`;
-                const matchState = { roomId, players: [player, opponent], moves: {}, scores: { [userId]: 0, [opponent.userId]: 0 }, active: true };
-                pvpMatches.set(roomId, matchState);
 
-                socket.join(roomId);
-                const opponentSocket = io.sockets.sockets.get(opponent.socketId);
-                if (opponentSocket) {
-                    opponentSocket.join(roomId);
-                    io.to(roomId).emit("match_found", { roomId, players: matchState.players });
-                } else {
-                    console.error(`❌ Opponent socket lost: ${opponent.socketId}`);
+                // DEDUCT STAKES SYNC
+                try {
+                    const p1 = await User.findByPk(userId);
+                    const p2 = await User.findByPk(opponent.userId);
+
+                    if (!p1 || p1.coins < 50 || !p2 || p2.coins < 50) {
+                        console.warn(`❌ Match cancelled: Insufficient funds for p1=${p1?.coins} or p2=${p2?.coins}`);
+                        // If one failed, we don't start the match. 
+                        // Simplified: just return. Real app would notify users.
+                        return;
+                    }
+
+                    p1.coins -= 50;
+                    p2.coins -= 50;
+                    await p1.save();
+                    await p2.save();
+
+                    const roomId = `room_${userId}_${opponent.userId}`;
+                    const matchState = {
+                        roomId,
+                        players: [player, opponent],
+                        moves: {},
+                        scores: { [userId]: 0, [opponent.userId]: 0 },
+                        active: true,
+                        stakeDeducted: true
+                    };
+                    pvpMatches.set(roomId, matchState);
+
+                    socket.join(roomId);
+                    const opponentSocket = io.sockets.sockets.get(opponent.socketId);
+                    if (opponentSocket) {
+                        opponentSocket.join(roomId);
+                        io.to(roomId).emit("match_found", { roomId, players: matchState.players });
+                    }
+                } catch (err) {
+                    console.error("Match Start Error:", err);
                 }
             } else {
-                pvpQueue.push(player);
-                socket.emit("waiting_for_opponent");
+                // Check balance before queuing
+                const user = await User.findByPk(userId);
+                if (user && user.coins >= 50) {
+                    pvpQueue.push(player);
+                    socket.emit("waiting_for_opponent");
+                } else {
+                    socket.emit("error", { message: "Недостаточно монет для игры (нужно 50)" });
+                }
             }
         } catch (e) {
             console.error(`❌ Socket Auth Error for user ${userId}:`, e.message);
@@ -545,6 +622,9 @@ io.on("connection", (socket) => {
         const { roomId, userId, move } = data;
         const match = pvpMatches.get(roomId);
         if (!match || !match.active) return;
+
+        // Security check: is user in this match?
+        if (!match.players.find(p => String(p.userId) === String(userId))) return;
 
         match.moves[String(userId)] = move;
         const playerIds = match.players.map(p => String(p.userId));
@@ -560,25 +640,50 @@ io.on("connection", (socket) => {
             if (res !== 'draw') match.scores[String(res)]++;
             io.to(roomId).emit("round_result", { moves: match.moves, winner: res, scores: match.scores });
             match.moves = {};
+
             const winnerId = Object.keys(match.scores).find(id => match.scores[id] >= 3);
             if (winnerId) {
                 match.active = false;
                 const loserId = playerIds.find(id => id != winnerId);
                 const winner = await User.findByPk(winnerId), loser = await User.findByPk(loserId);
-                winner.coins += 50; winner.wins += 1; winner.total_earned += 50; loser.losses += 1;
-                await winner.save(); await loser.save();
-                io.to(roomId).emit("match_over", { winnerId, reward: 50 });
+
+                // Winner takes the 100 coin pool (50+50)
+                winner.coins += 100;
+                winner.wins += 1;
+                winner.total_earned += 50; // Profit is 50
+                loser.losses += 1;
+
+                await winner.save();
+                await loser.save();
+
+                io.to(roomId).emit("match_over", { winnerId, reward: 100 });
                 pvpMatches.delete(roomId);
             }
         }
     });
 
-    socket.on("disconnect", () => {
+    socket.on("disconnect", async () => {
         const idx = pvpQueue.findIndex(p => p.socketId === socket.id);
         if (idx !== -1) pvpQueue.splice(idx, 1);
+
         for (const [roomId, match] of pvpMatches.entries()) {
-            if (match.players.find(p => p.socketId === socket.id)) {
-                io.to(roomId).emit("opponent_disconnected");
+            const discPlayer = match.players.find(p => p.socketId === socket.id);
+            if (discPlayer && match.active) {
+                match.active = false;
+                const winnerObj = match.players.find(p => p.socketId !== socket.id);
+
+                if (winnerObj) {
+                    const winnerId = winnerObj.userId;
+                    const winner = await User.findByPk(winnerId);
+                    if (winner) {
+                        // Winner by disconnect gets the 100 coin pool
+                        winner.coins += 100;
+                        winner.wins += 1;
+                        winner.total_earned += 50;
+                        await winner.save();
+                        io.to(roomId).emit("match_over", { winnerId, reward: 100, reason: "opponent_disconnected" });
+                    }
+                }
                 pvpMatches.delete(roomId);
             }
         }
