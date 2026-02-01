@@ -236,25 +236,27 @@ export const GameNavigator: React.FC = () => {
 
   useEffect(() => {
     const SWIPE_THRESHOLD = 80;
-    const EDGE_ZONE = 30; // Native-like edge zone
+    const EDGE_ZONE = 40; // Increased for better Android high-DPI screen support
     const MAX_VERTICAL_DIFF = 60;
+    const MIN_HORIZONTAL_BEFORE_ACTIVATE = 15; // Minimum horizontal movement before activating swipe
 
     let touchStartY = 0;
     let touchStartX = 0;
     let activeSide: 'left' | 'right' | null = null;
+    let isSwipeActive = false;
 
     const handleTouchStart = (e: TouchEvent) => {
       const x = e.touches[0].clientX;
       const y = e.touches[0].clientY;
       touchStartY = y;
       touchStartX = x;
+      isSwipeActive = false;
 
+      // Check if touch starts in edge zone
       if (x < EDGE_ZONE) {
         activeSide = 'left';
-        setSwipeState({ startX: x, currentX: x, side: 'left', isCommitted: false });
       } else if (x > window.innerWidth - EDGE_ZONE) {
         activeSide = 'right';
-        setSwipeState({ startX: x, currentX: x, side: 'right', isCommitted: false });
       } else {
         activeSide = null;
       }
@@ -267,8 +269,10 @@ export const GameNavigator: React.FC = () => {
       const currentY = e.touches[0].clientY;
       const diffY = Math.abs(currentY - touchStartY);
 
+      // Cancel if vertical movement is too much (user is scrolling)
       if (diffY > MAX_VERTICAL_DIFF) {
         activeSide = null;
+        isSwipeActive = false;
         setSwipeState(prev => ({ ...prev, side: null }));
         return;
       }
@@ -280,27 +284,53 @@ export const GameNavigator: React.FC = () => {
         diffX = touchStartX - currentX;
       }
 
+      // Don't activate visual feedback until minimum horizontal movement
+      if (diffX < MIN_HORIZONTAL_BEFORE_ACTIVATE && !isSwipeActive) {
+        return;
+      }
+
+      // Android fix: Only activate swipe if horizontal movement is dominant
+      if (!isSwipeActive) {
+        const diffYAbs = Math.abs(currentY - touchStartY);
+        if (diffX < diffYAbs) {
+          // Vertical movement is dominant, cancel swipe
+          activeSide = null;
+          return;
+        }
+        isSwipeActive = true;
+      }
+
       const isCommitted = diffX > SWIPE_THRESHOLD;
       setSwipeState({ startX: touchStartX, currentX, side: activeSide, isCommitted });
     };
 
     const handleTouchEnd = () => {
       const current = swipeRef.current;
-      if (current.side && current.isCommitted) {
+      if (current.side && current.isCommitted && isSwipeActive) {
         handleBackRef.current();
       }
       activeSide = null;
+      isSwipeActive = false;
+      setSwipeState({ startX: 0, currentX: 0, side: null, isCommitted: false });
+    };
+
+    // Android fix: Handle touchcancel (system gesture, scroll takeover, etc.)
+    const handleTouchCancel = () => {
+      activeSide = null;
+      isSwipeActive = false;
       setSwipeState({ startX: 0, currentX: 0, side: null, isCommitted: false });
     };
 
     window.addEventListener("touchstart", handleTouchStart, { passive: true });
     window.addEventListener("touchmove", handleTouchMove, { passive: true });
     window.addEventListener("touchend", handleTouchEnd, { passive: true });
+    window.addEventListener("touchcancel", handleTouchCancel, { passive: true });
 
     return () => {
       window.removeEventListener("touchstart", handleTouchStart);
       window.removeEventListener("touchmove", handleTouchMove);
       window.removeEventListener("touchend", handleTouchEnd);
+      window.removeEventListener("touchcancel", handleTouchCancel);
     };
   }, []);
 
