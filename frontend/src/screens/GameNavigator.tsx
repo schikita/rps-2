@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { getSfxVolume, setSfxVolume, setMusicVolume } from "../sounds/useSound";
 // type import removed since unsused in this file now
 import { GameScreen } from "./GameScreen";
@@ -214,125 +214,26 @@ export const GameNavigator: React.FC = () => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [handleBack]);
 
-  // Handle Swipe Back Navigation (Left AND Right sides) with visual feedback
-  const [swipeState, setSwipeState] = useState<{
-    startX: number;
-    currentX: number;
-    side: 'left' | 'right' | null;
-    isCommitted: boolean;
-  }>({ startX: 0, currentX: 0, side: null, isCommitted: false });
-
-  // Use refs to avoid stale closure issues in touch handlers
-  const swipeRef = useRef(swipeState);
-  const handleBackRef = useRef(handleBack);
-
+  // Telegram BackButton Integration
   useEffect(() => {
-    swipeRef.current = swipeState;
-  }, [swipeState]);
+    const tg = (window as any).Telegram?.WebApp;
+    if (!tg || !tg.BackButton) return;
 
-  useEffect(() => {
-    handleBackRef.current = handleBack;
-  }, [handleBack]);
+    const canGoBack = screen !== "menu" || isChangingAvatar || !!selectedAchievement || modal.isOpen;
 
-  useEffect(() => {
-    const SWIPE_THRESHOLD = 80;
-    const EDGE_ZONE = 40; // Increased for better Android high-DPI screen support
-    const MAX_VERTICAL_DIFF = 60;
-    const MIN_HORIZONTAL_BEFORE_ACTIVATE = 15; // Minimum horizontal movement before activating swipe
-
-    let touchStartY = 0;
-    let touchStartX = 0;
-    let activeSide: 'left' | 'right' | null = null;
-    let isSwipeActive = false;
-
-    const handleTouchStart = (e: TouchEvent) => {
-      const x = e.touches[0].clientX;
-      const y = e.touches[0].clientY;
-      touchStartY = y;
-      touchStartX = x;
-      isSwipeActive = false;
-
-      // Check if touch starts in edge zone
-      if (x < EDGE_ZONE) {
-        activeSide = 'left';
-      } else if (x > window.innerWidth - EDGE_ZONE) {
-        activeSide = 'right';
-      } else {
-        activeSide = null;
-      }
-    };
-
-    const handleTouchMove = (e: TouchEvent) => {
-      if (!activeSide) return;
-
-      const currentX = e.touches[0].clientX;
-      const currentY = e.touches[0].clientY;
-      const diffY = Math.abs(currentY - touchStartY);
-
-      // Cancel if vertical movement is too much (user is scrolling)
-      if (diffY > MAX_VERTICAL_DIFF) {
-        activeSide = null;
-        isSwipeActive = false;
-        setSwipeState(prev => ({ ...prev, side: null }));
-        return;
-      }
-
-      let diffX = 0;
-      if (activeSide === 'left') {
-        diffX = currentX - touchStartX;
-      } else {
-        diffX = touchStartX - currentX;
-      }
-
-      // Don't activate visual feedback until minimum horizontal movement
-      if (diffX < MIN_HORIZONTAL_BEFORE_ACTIVATE && !isSwipeActive) {
-        return;
-      }
-
-      // Android fix: Only activate swipe if horizontal movement is dominant
-      if (!isSwipeActive) {
-        const diffYAbs = Math.abs(currentY - touchStartY);
-        if (diffX < diffYAbs) {
-          // Vertical movement is dominant, cancel swipe
-          activeSide = null;
-          return;
-        }
-        isSwipeActive = true;
-      }
-
-      const isCommitted = diffX > SWIPE_THRESHOLD;
-      setSwipeState({ startX: touchStartX, currentX, side: activeSide, isCommitted });
-    };
-
-    const handleTouchEnd = () => {
-      const current = swipeRef.current;
-      if (current.side && current.isCommitted && isSwipeActive) {
-        handleBackRef.current();
-      }
-      activeSide = null;
-      isSwipeActive = false;
-      setSwipeState({ startX: 0, currentX: 0, side: null, isCommitted: false });
-    };
-
-    // Android fix: Handle touchcancel (system gesture, scroll takeover, etc.)
-    const handleTouchCancel = () => {
-      activeSide = null;
-      isSwipeActive = false;
-      setSwipeState({ startX: 0, currentX: 0, side: null, isCommitted: false });
-    };
-
-    window.addEventListener("touchstart", handleTouchStart, { passive: true });
-    window.addEventListener("touchmove", handleTouchMove, { passive: true });
-    window.addEventListener("touchend", handleTouchEnd, { passive: true });
-    window.addEventListener("touchcancel", handleTouchCancel, { passive: true });
+    if (canGoBack) {
+      tg.BackButton.show();
+      tg.BackButton.onClick(handleBack);
+    } else {
+      tg.BackButton.hide();
+    }
 
     return () => {
-      window.removeEventListener("touchstart", handleTouchStart);
-      window.removeEventListener("touchmove", handleTouchMove);
-      window.removeEventListener("touchend", handleTouchEnd);
-      window.removeEventListener("touchcancel", handleTouchCancel);
+      tg.BackButton.offClick(handleBack);
     };
-  }, []);
+  }, [screen, isChangingAvatar, selectedAchievement, modal.isOpen, handleBack]);
+
+
 
   const handleBuy = async (item: Skin) => {
     playSound('click_sharp');
@@ -456,6 +357,8 @@ export const GameNavigator: React.FC = () => {
     <div className="app-root">
       <div className="app-gradient-bg" />
 
+
+
       <CustomModal
         isOpen={modal.isOpen}
         title={modal.title}
@@ -465,19 +368,7 @@ export const GameNavigator: React.FC = () => {
       />
 
       <div className="app-content">
-        {swipeState.side && (
-          <div className={`swipe-indicator-container ${swipeState.side}`}>
-            <div
-              className={`swipe-arc ${swipeState.isCommitted ? 'committed' : ''}`}
-              style={{
-                transform: `translateX(${Math.min(0, -40 + (swipeState.side === 'left' ? swipeState.currentX - swipeState.startX : swipeState.startX - swipeState.currentX) * 0.4)}px)`,
-                opacity: Math.min(1, (swipeState.side === 'left' ? swipeState.currentX - swipeState.startX : swipeState.startX - swipeState.currentX) / 100)
-              }}
-            >
-              <div className="swipe-arrow">←</div>
-            </div>
-          </div>
-        )}
+
 
         {screen !== "game" && (
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, marginTop: 10, padding: "0 4px" }}>

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useSound } from "../sounds/useSound";
 import { API_URL, STORAGE_KEY_TOKEN } from "../config";
 
@@ -23,7 +23,7 @@ export const PrivacyPolicyRules: React.FC<PrivacyPolicyRulesProps> = ({ onBack, 
         }
     }, [activeTab]);
 
-    const handleBack = () => {
+    const handleBack = useCallback(() => {
         playSound('click_soft');
         if (activeTab === 'rules') {
             setActiveTab('terms');
@@ -32,7 +32,20 @@ export const PrivacyPolicyRules: React.FC<PrivacyPolicyRulesProps> = ({ onBack, 
         } else {
             onBack();
         }
-    };
+    }, [activeTab, onBack, playSound]);
+
+    useEffect(() => {
+        const tg = (window as any).Telegram?.WebApp;
+        if (!tg || !tg.BackButton) return;
+
+        tg.BackButton.show();
+        tg.BackButton.onClick(handleBack);
+
+        return () => {
+            tg.BackButton.offClick(handleBack);
+            tg.BackButton.hide();
+        };
+    }, [handleBack]);
 
     const handleSwitchToTerms = () => {
         playSound('click_main');

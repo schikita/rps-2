@@ -29,6 +29,11 @@ body {
   position: relative;
   min-height: 100vh;
   overflow: hidden;
+  /* Android: Allow vertical panning but handle horizontal via JS */
+  touch-action: pan-y pinch-zoom;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* Неоновая сетка на фоне */
@@ -36,10 +41,8 @@ body {
   position: fixed;
   inset: 0;
   opacity: 0.14;
-  background-image: linear-gradient(
-      rgba(255, 255, 255, 0.08) 1px,
-      transparent 1px
-    ),
+  background-image: linear-gradient(rgba(255, 255, 255, 0.08) 1px,
+      transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
   background-size: 40px 40px;
   pointer-events: none;
@@ -53,6 +56,7 @@ body {
   opacity: 0.6;
   pointer-events: none;
 }
+
 .bg-glow-1 {
   width: 420px;
   height: 420px;
@@ -60,6 +64,7 @@ body {
   top: -100px;
   left: -80px;
 }
+
 .bg-glow-2 {
   width: 520px;
   height: 520px;
@@ -84,6 +89,7 @@ body {
   color: #ffffff;
   text-shadow: 0 0 24px rgba(0, 0, 0, 0.9);
 }
+
 .title-sub {
   display: block;
   font-size: 14px;
@@ -117,13 +123,10 @@ body {
   inset: -1px;
   border-radius: inherit;
   border: 1px solid transparent;
-  background: linear-gradient(
-      120deg,
+  background: linear-gradient(120deg,
       rgba(0, 229, 255, 0.8),
       rgba(255, 78, 205, 0.9),
-      rgba(255, 200, 87, 0.8)
-    )
-    border-box;
+      rgba(255, 200, 87, 0.8)) border-box;
   mask: linear-gradient(#000 0 0) padding-box, linear-gradient(#000 0 0);
   mask-composite: exclude;
   opacity: 0.5;
@@ -132,11 +135,9 @@ body {
 .card-avatar {
   height: 120px;
   border-radius: 18px;
-  background-image: linear-gradient(
-      -45deg,
+  background-image: linear-gradient(-45deg,
       rgba(0, 229, 255, 0.9),
-      rgba(255, 78, 205, 0.9)
-    ),
+      rgba(255, 78, 205, 0.9)),
     radial-gradient(circle at 20% 0, rgba(255, 255, 255, 0.2), transparent);
   background-blend-mode: screen;
   position: relative;
@@ -147,9 +148,11 @@ body {
 .card-human .card-avatar {
   filter: hue-rotate(20deg);
 }
+
 .card-android .card-avatar {
   filter: hue-rotate(-40deg);
 }
+
 .card-cyborg .card-avatar {
   filter: hue-rotate(120deg);
 }
@@ -158,21 +161,21 @@ body {
   content: "";
   position: absolute;
   inset: 0;
-  background-image: radial-gradient(
-    circle at 10% 20%,
-    rgba(0, 0, 0, 0.3),
-    transparent 60%
-  );
+  background-image: radial-gradient(circle at 10% 20%,
+      rgba(0, 0, 0, 0.3),
+      transparent 60%);
   mix-blend-mode: multiply;
 }
 
 .card-body {
   margin-top: 12px;
 }
+
 .card-body h2 {
   margin: 0;
   font-size: 18px;
 }
+
 .card-role {
   margin: 4px 0 8px;
   font-size: 13px;
@@ -180,6 +183,7 @@ body {
   letter-spacing: 0.12em;
   color: rgba(226, 232, 255, 0.7);
 }
+
 .card-desc {
   margin: 0;
   font-size: 14px;
@@ -195,6 +199,7 @@ body {
   border: 1px solid rgba(0, 229, 255, 0.4);
   box-shadow: 0 0 30px rgba(0, 229, 255, 0.25);
 }
+
 .panel-title {
   margin: 0 0 12px;
   font-size: 15px;
@@ -226,11 +231,13 @@ body {
   transition: transform 0.12s ease-out, box-shadow 0.12s ease-out,
     filter 0.12s ease-out;
 }
+
 .btn-choice:hover {
   transform: translateY(-2px) scale(1.02);
   box-shadow: 0 0 20px rgba(0, 229, 255, 0.9);
   filter: brightness(1.05);
 }
+
 .btn-choice:active {
   transform: translateY(0) scale(0.98);
   box-shadow: 0 0 10px rgba(0, 229, 255, 0.7);
