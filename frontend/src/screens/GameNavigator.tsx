@@ -62,6 +62,10 @@ interface AchievementProps {
 }
 
 const PRESET_AVATARS = [
+  "/avatars/boy.jpg",
+  "/avatars/cyber.jpg",
+  "/avatars/princessDune.jpg",
+  "/avatars/roboCop.jpg",
   "/avatars/skin-1.jpg",
   "/avatars/skin-2.jpg",
   "/avatars/skin-3.jpg",
@@ -105,7 +109,7 @@ export const GameNavigator: React.FC = () => {
   }, [getMusicVolume, isMusicPlaying, playMusic]);
 
   const [shopItems, setShopItems] = useState<Skin[]>([]);
-  const [shopCategory, setShopCategory] = useState<'border' | 'background' | 'hands'>('border');
+  const [shopCategory, setShopCategory] = useState<'border' | 'background' | 'hands'>('hands');
   const [sfxVolume, setSfxVolState] = useState(getSfxVolume());
   const [musicVolume, setMusicVolState] = useState(getMusicVolume());
 
@@ -187,6 +191,14 @@ export const GameNavigator: React.FC = () => {
 
     // Special case for leaving the game arena
     if (screen === "game") {
+      // Cancel any active match session on the server
+      const token = localStorage.getItem("token");
+      if (token) {
+        fetch(`${API_URL}/api/match/cancel`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        }).catch(() => { }); // Ignore errors
+      }
       setNavContext("menu");
       setScreen("menu");
       setNavHistory([]);
@@ -312,16 +324,13 @@ export const GameNavigator: React.FC = () => {
         body: JSON.stringify({ avatar: newAvatarUrl }),
       });
       if (!res.ok) {
-        const data = await res.json();
-        showModal("Ошибка", data.error || "Не удалось сменить аватар", "error");
         return;
       }
       playSound('success');
       await refreshUser();
       setIsChangingAvatar(false);
-      showModal("Успех!", "Аватар успешно изменен!", "success");
-    } catch {
-      showModal("Ошибка сети", "Проверьте соединение", "error");
+    } catch (e) {
+      console.error("Avatar change error:", e);
     }
   };
 
@@ -333,15 +342,69 @@ export const GameNavigator: React.FC = () => {
   const currentSkin = shopItems.find(i => i.id === equippedSkinId) || DEFAULT_SKIN;
   const currentThemeColor = currentSkin.color || "#38bdf8";
 
+  // Level calculation helper - XP from wins and games played
+  const calculateLevel = (wins: number, losses: number) => {
+    const xp = wins * 100 + (wins + losses) * 10; // 100 XP per win, 10 XP per game
+    let level = 1;
+    let xpForNextLevel = 200;
+    let totalXpRequired = 0;
+
+    while (xp >= totalXpRequired + xpForNextLevel) {
+      totalXpRequired += xpForNextLevel;
+      level++;
+      xpForNextLevel = Math.floor(200 * Math.pow(1.2, level - 1));
+    }
+
+    const currentLevelXp = xp - totalXpRequired;
+    const progress = (currentLevelXp / xpForNextLevel) * 100;
+
+    return { level, xp, currentLevelXp, xpForNextLevel, progress };
+  };
+
+  const getRankTitle = (level: number) => {
+    if (level >= 50) return 'ЛЕГЕНДА КИБЕРСПОРТА';
+    if (level >= 30) return 'ГРАНД-МАСТЕР';
+    if (level >= 20) return 'МАСТЕР';
+    if (level >= 15) return 'ЭКСПЕРТ';
+    if (level >= 10) return 'ПРОФЕССИОНАЛ';
+    if (level >= 5) return 'ОПЫТНЫЙ';
+    return 'НОВИЧОК';
+  };
+
+  const userLevel = calculateLevel(user.wins, user.losses);
+
+  // Map imageId to actual CSS background styles
+  const getBackgroundStyle = () => {
+    const bgItem = (user as any).Items?.find((i: any) => i.id === user.equippedBackgroundId);
+    const bgId = bgItem?.imageId;
+    const bgColor = bgItem?.color;
+
+    if (bgId && bgId !== 'default') {
+      // Photo backgrounds
+      if (bgId === 'zakat' || bgId === 'cosmos') {
+        return `url('/images/${bgId}.jpg') center/cover no-repeat`;
+      }
+      // Color-based backgrounds (Neon)
+      if (bgId === 'bg_neon') {
+        return `radial-gradient(circle at 15% 0%, ${bgColor}80, transparent 55%), radial-gradient(circle at 85% 80%, ${bgColor}80, transparent 55%), linear-gradient(135deg, #0f172a 0%, #020617 100%)`;
+      }
+      // Fallback to image
+      return `url('/images/${bgId}.png') center/cover no-repeat`;
+    }
+
+    // Original dynamic theme color background for 'default' or null
+    return `radial-gradient(circle at 15% 0%, ${currentThemeColor}60, transparent 55%), radial-gradient(circle at 85% 80%, ${currentThemeColor}60, transparent 55%)`;
+  };
+
   const shopCardStyle: React.CSSProperties = {
     background: 'rgba(255,255,255,0.05)',
-    paddingTop: 20,
+    padding: 10,
     borderRadius: 12,
     textAlign: 'center',
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'space-between',
-    height: 160
+    aspectRatio: '1 / 1.1' // Slightly taller than square, matches column width proportion
   };
 
   const actionContainerStyle: React.CSSProperties = {
@@ -353,9 +416,12 @@ export const GameNavigator: React.FC = () => {
     width: '100%'
   };
 
+  const borderSkin = (user as any).Items?.find((i: any) => i.id === user.equippedBorderId);
+  const borderClass = borderSkin?.imageId ? `border-${borderSkin.imageId}` : '';
+
   return (
-    <div className="app-root">
-      <div className="app-gradient-bg" />
+    <div className={`app-root ${borderClass}`}>
+      <div className="app-gradient-bg" style={{ background: getBackgroundStyle() }} />
 
 
 
@@ -411,7 +477,7 @@ export const GameNavigator: React.FC = () => {
         {screen === "menu" && (
           <div className="animate-fade-in" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
             <h1 className="logo-title" style={{ fontSize: '2.5rem', fontWeight: 900 }}>CYBER RPS</h1>
-            <p className="logo-subtitle" style={{ marginBottom: 40 }}>HUB SYSTEM</p>
+            <p className="logo-subtitle" style={{ marginBottom: 40 }}>ЦЕНТРАЛЬНАЯ СИСТЕМА</p>
 
             <div style={{ display: 'grid', gap: 14 }}>
               <MenuButton title="Тренировка" subtitle="Фарм монет" icon="/images/Training.png" onClick={() => startGame("bot")} />
@@ -434,7 +500,7 @@ export const GameNavigator: React.FC = () => {
             <div style={{ marginTop: 'auto', paddingTop: 15, marginBottom: 15 }}>
               <MenuButton
                 title="КАСТОМИЗАЦИЯ"
-                subtitle="Фоны, руки и скины"
+                subtitle="Скины для рук"
                 icon="/images/shop.png"
                 onClick={() => goToAuxiliaryScreen("shop")}
               />
@@ -444,59 +510,38 @@ export const GameNavigator: React.FC = () => {
 
         {screen === "shop" && (
           <div className="animate-fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <button onClick={handleBack} className="back-btn">← Назад</button>
-            <h2>Кастомизация</h2>
-
-            {/* Category Tabs */}
-            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-              {[
-                { key: 'border' as const, label: '🎨 Скины', icon: '🎨' },
-                { key: 'background' as const, label: '🖼️ Фоны', icon: '🖼️' },
-                { key: 'hands' as const, label: '✋ Руки', icon: '✋' }
-              ].map(tab => (
-                <button
-                  key={tab.key}
-                  onClick={() => setShopCategory(tab.key)}
-                  style={{
-                    flex: 1,
-                    padding: '10px 8px',
-                    borderRadius: 12,
-                    border: shopCategory === tab.key ? '2px solid var(--accent-cyan)' : '1px solid rgba(255,255,255,0.1)',
-                    background: shopCategory === tab.key ? 'rgba(34, 211, 238, 0.15)' : 'rgba(255,255,255,0.05)',
-                    color: shopCategory === tab.key ? 'var(--accent-cyan)' : '#9ca3af',
-                    fontWeight: 600,
-                    fontSize: '0.85rem',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  {tab.label}
-                </button>
-              ))}
+            <button onClick={handleBack} className="back-btn-new" style={{ marginBottom: 15 }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+            </button>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+              <button
+                onClick={() => setShopCategory('hands')}
+                className={`shop-tab ${shopCategory === 'hands' ? 'active' : ''}`}
+                style={{ flex: 1, marginTop: '10px', padding: '10px', borderRadius: '12px', background: shopCategory === 'hands' ? `${currentThemeColor}20` : 'rgba(255,255,255,0.05)', border: `1px solid ${shopCategory === 'hands' ? currentThemeColor : 'rgba(255,255,255,0.1)'}`, color: shopCategory === 'hands' ? currentThemeColor : '#9ca3af', fontWeight: 'bold', fontSize: '0.8rem' }}
+              >
+                РУКИ
+              </button>
+              <button
+                onClick={() => setShopCategory('background')}
+                className={`shop-tab ${shopCategory === 'background' ? 'active' : ''}`}
+                style={{ flex: 1, marginTop: '10px', padding: '10px', borderRadius: '12px', background: shopCategory === 'background' ? `${currentThemeColor}20` : 'rgba(255,255,255,0.05)', border: `1px solid ${shopCategory === 'background' ? currentThemeColor : 'rgba(255,255,255,0.1)'}`, color: shopCategory === 'background' ? currentThemeColor : '#9ca3af', fontWeight: 'bold', fontSize: '0.8rem' }}
+              >
+                ФОНЫ
+              </button>
             </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, overflowY: 'auto', paddingBottom: 20, flex: 1, alignContent: 'start' }}>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, overflowY: 'auto', paddingBottom: 20, flex: 1 }}>
 
-              {/* Default item for borders only */}
-              {shopCategory === 'border' && (
-                <div style={shopCardStyle}>
-                  <div>
-                    <div style={{ width: 40, height: 40, background: DEFAULT_SKIN.color, borderRadius: '50%', margin: '0 auto 10px' }}></div>
-                    <div style={{ fontWeight: 'bold' }}>Стандарт</div>
-                  </div>
-                  <div style={actionContainerStyle}>
-                    {equippedSkinId === DEFAULT_SKIN.id ? (
-                      <div style={{ fontSize: '0.8rem', color: DEFAULT_SKIN.color, fontWeight: 'bold' }}>ВЫБРАНО</div>
-                    ) : (
-                      <button className="shop-btn shop-btn-equip" onClick={() => handleEquip(DEFAULT_SKIN.id)} style={{ color: DEFAULT_SKIN.color }}>НАДЕТЬ</button>
-                    )}
-                  </div>
-                </div>
-              )}
 
-              {/* Items filtered by category */}
-              {shopItems.filter(item => item.type === shopCategory).map(item => {
-                const isOwned = inventory.includes(item.id);
+              {/* Items filtered by category - sort defaults first */}
+              {[...shopItems.filter(item => item.type === shopCategory)].sort((a, b) => {
+                if (a.price === 0 && b.price !== 0) return -1;
+                if (a.price !== 0 && b.price === 0) return 1;
+                return 0;
+              }).map(item => {
+                const isOwned = inventory.includes(item.id) || item.price === 0;
                 const isEquipped = shopCategory === 'border'
                   ? equippedSkinId === item.id
                   : shopCategory === 'background'
@@ -506,19 +551,61 @@ export const GameNavigator: React.FC = () => {
                   <div key={item.id} style={shopCardStyle}>
                     <div>
                       <div style={{
-                        width: 40,
-                        height: 40,
-                        background: item.color || '#fff',
-                        borderRadius: shopCategory === 'hands' ? '8px' : '50%',
+                        width: '100%',
+                        height: 60,
+                        background: (item.type === 'hands' || item.type === 'background') ? 'transparent' : (item.color || '#fff'),
+                        borderRadius: (item.type === 'hands' || item.type === 'background') ? '0' : '50%',
                         margin: '0 auto 10px',
-                        boxShadow: `0 0 15px ${item.color}80`,
+                        boxShadow: (item.type === 'hands' || item.type === 'background') ? 'none' : `0 0 15px ${item.color}80`,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: '1.2rem'
+                        fontSize: '1.2rem',
+                        overflow: 'hidden'
                       }}>
-                        {shopCategory === 'hands' && '✊'}
-                        {shopCategory === 'background' && '🎆'}
+                        {item.type === 'hands' ? (
+                          <img
+                            src={
+                              item.imageId === 'default' ? "/images/default-rock.png" :
+                                item.imageId === 'tanos' ? "/images/tanos-rock.png" :
+                                  item.imageId === 'robocop' ? "/images/robocop-rock.png" :
+                                    `/images/${item.imageId}_rock.png`
+                            }
+                            alt={item.name}
+                            style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                            onError={(e) => { e.currentTarget.src = "/images/coin.png"; }}
+                          />
+                        ) : item.type === 'background' ? (
+                          (item.imageId === 'default' || item.imageId === 'bg_neon') ? (
+                            <div style={{
+                              width: '100%',
+                              height: '100%',
+                              background: `linear-gradient(135deg, ${item.color} 0%, ${item.color}99 50%, ${item.color}66 100%)`,
+                              borderRadius: 8,
+                              boxShadow: `0 0 15px ${item.color}60, inset 0 0 20px ${item.color}40`
+                            }} />
+                          ) : (
+                            <img
+                              src={
+                                (item.imageId === 'zakat' || item.imageId === 'cosmos') ? `/images/${item.imageId}.jpg` :
+                                  `/images/${item.imageId}.png`
+                              }
+                              alt={item.name}
+                              style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8 }}
+                              onError={(e) => { e.currentTarget.src = "/images/coin.png"; }}
+                            />
+                          )
+                        ) : (
+                          /* Border type - CSS visual instead of emoji for cross-platform consistency */
+                          <div style={{
+                            width: '100%',
+                            height: '100%',
+                            borderRadius: 8,
+                            border: `3px solid ${item.color || '#38bdf8'}`,
+                            background: 'rgba(255,255,255,0.05)',
+                            boxShadow: `0 0 10px ${item.color}40, inset 0 0 15px ${item.color}20`
+                          }} />
+                        )}
                       </div>
                       <div style={{ fontWeight: 'bold' }}>{item.name}</div>
                     </div>
@@ -570,9 +657,13 @@ export const GameNavigator: React.FC = () => {
         {screen === "leaders" && (
           <div className="animate-fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20 }}>
-              <button onClick={handleBack} className="back-btn">← Назад</button>
+              <button onClick={handleBack} className="back-btn-new">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
+              </button>
               <div style={{ flex: 1, textAlign: 'center', fontFamily: 'Bounded', fontSize: '1.2rem', letterSpacing: '0.1em' }}>ТОП ИГРОКОВ</div>
-              <div style={{ width: 60 }}></div>
+              <div style={{ width: 42 }}></div>
             </div>
 
             <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -603,7 +694,11 @@ export const GameNavigator: React.FC = () => {
         {screen === "tournament" && (
           <div className="animate-fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 25, position: 'relative' }}>
-              <button onClick={handleBack} className="back-btn" style={{ position: 'absolute', left: 0 }}>← Назад</button>
+              <button onClick={handleBack} className="back-btn-new" style={{ position: 'absolute', left: 0 }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
+              </button>
               <div style={{ flex: 1, textAlign: 'center', fontFamily: 'Bounded', fontSize: '1.4rem', letterSpacing: '0.15em' }}>ТУРНИР</div>
             </div>
 
@@ -682,9 +777,13 @@ export const GameNavigator: React.FC = () => {
         {screen === "profile" && (
           <div className="animate-fade-in" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20 }}>
-              <button onClick={handleBack} className="back-btn">← Назад</button>
+              <button onClick={handleBack} className="back-btn-new">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
+              </button>
               <div style={{ flex: 1, textAlign: 'center', fontFamily: 'Bounded', fontSize: '1.2rem', letterSpacing: '0.1em' }}>ПРОФИЛЬ</div>
-              <div style={{ width: 60 }}></div>
+              <div style={{ width: 42 }}></div>
             </div>
 
             <div className="profile-container" style={{ flex: 1, overflowY: 'auto', paddingBottom: 20 }}>
@@ -780,8 +879,46 @@ export const GameNavigator: React.FC = () => {
                 )}
 
                 <h2 style={{ fontFamily: 'Bounded', marginTop: 15, fontSize: '1.8rem', marginBottom: 4 }}>{user.nickname}</h2>
-                <div style={{ color: currentThemeColor, fontSize: '0.75rem', letterSpacing: '0.2em', textTransform: 'uppercase', fontWeight: 800 }}>
-                  {user.wins > 50 ? 'ЛЕГЕНДА КИБЕРСПОРТА' : user.wins > 20 ? 'ПРОФЕССИОНАЛ' : 'НОВИЧОК'}
+
+                {/* Level Badge and Rank */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <div style={{
+                    background: `linear-gradient(135deg, ${currentThemeColor}, ${currentThemeColor}99)`,
+                    padding: '4px 12px',
+                    borderRadius: 20,
+                    fontSize: '0.7rem',
+                    fontWeight: 900,
+                    letterSpacing: '0.1em',
+                    boxShadow: `0 0 10px ${currentThemeColor}40`
+                  }}>
+                    LVL {userLevel.level}
+                  </div>
+                  <div style={{ color: currentThemeColor, fontSize: '0.75rem', letterSpacing: '0.2em', textTransform: 'uppercase', fontWeight: 800 }}>
+                    {getRankTitle(userLevel.level)}
+                  </div>
+                </div>
+
+                {/* XP Progress Bar */}
+                <div style={{ width: '100%', maxWidth: 280, margin: '0 auto' }}>
+                  <div style={{
+                    width: '100%',
+                    height: 8,
+                    background: 'rgba(255,255,255,0.1)',
+                    borderRadius: 4,
+                    overflow: 'hidden',
+                    marginBottom: 4
+                  }}>
+                    <div style={{
+                      width: `${userLevel.progress}%`,
+                      height: '100%',
+                      background: `linear-gradient(90deg, ${currentThemeColor}, ${currentThemeColor}cc)`,
+                      borderRadius: 4,
+                      transition: 'width 0.3s ease'
+                    }} />
+                  </div>
+                  <div style={{ fontSize: '0.6rem', color: '#64748b', textAlign: 'center' }}>
+                    {userLevel.currentLevelXp} / {userLevel.xpForNextLevel} XP
+                  </div>
                 </div>
               </div>
 
@@ -972,17 +1109,17 @@ export const GameNavigator: React.FC = () => {
 
               <button
                 onClick={() => setSelectedAchievement(null)}
+                className="secondary-btn"
                 style={{
                   marginTop: 30,
-                  background: 'transparent',
-                  border: 'none',
-                  color: '#64748b',
-                  fontSize: '0.8rem',
-                  cursor: 'pointer',
-                  textDecoration: 'underline'
+                  width: '100%',
+                  padding: '12px',
+                  borderRadius: '14px',
+                  fontSize: '0.9rem',
+                  fontWeight: 800
                 }}
               >
-                Закрыть
+                ЗАКРЫТЬ
               </button>
             </div>
           </div>

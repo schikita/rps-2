@@ -7,6 +7,7 @@ const jwt = require("jsonwebtoken");
 const http = require("http");
 const { Server } = require("socket.io");
 
+const Sequelize = require('sequelize');
 const { sequelize, User, Item } = require('./models');
 
 const app = express();
@@ -16,6 +17,7 @@ app.use(cors());
 const JWT_SECRET = process.env.JWT_SECRET || "dev_secret";
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const PORT = process.env.PORT || 3000;
+const IS_LOCAL = process.env.DB_HOST === 'localhost' || !process.env.DATABASE_URL;
 
 const crypto = require("crypto");
 
@@ -91,7 +93,7 @@ app.post("/auth/register", async (req, res) => {
             username: nickname,
             email: email,
             password: hash,
-            avatar: avatar || "/avatars/skin-1.jpg"
+            avatar: avatar || "/avatars/boy.jpg"
         });
 
         const token = jwt.sign({ id: newUser.id }, JWT_SECRET, { expiresIn: '7d' });
@@ -120,7 +122,7 @@ app.post("/auth/telegram", async (req, res) => {
 
         // Генерация безопасного email для валидации
         const safeEmail = `${tgId}@telegram.bot`;
-        const newAvatar = userData.photo_url || "/avatars/skin-1.jpg";
+        const newAvatar = userData.photo_url || "/avatars/boy.jpg";
 
         if (!user) {
             // Создаем нового пользователя
@@ -180,7 +182,12 @@ app.get("/api/user", authenticateToken, async (req, res) => {
             include: { model: Item, through: { attributes: [] } }
         });
         if (!user) return res.status(404).json({ error: "Пользователь не найден" });
-        res.json({ user });
+
+        const userData = user.toJSON();
+        if (IS_LOCAL) {
+            userData.coins = 999999;
+        }
+        res.json({ user: userData });
     } catch (e) { res.status(500).json({ error: "Ошибка сервера" }); }
 });
 
@@ -320,10 +327,12 @@ app.post('/api/buy', authenticateToken, async (req, res) => {
         const hasItem = await user.hasItem(item);
         if (hasItem) return res.status(400).json({ error: "Уже куплено" });
 
-        if (user.coins < item.price) return res.status(400).json({ error: "Недостаточно монет" });
+        if (!IS_LOCAL && user.coins < item.price) return res.status(400).json({ error: "Недостаточно монет" });
 
-        user.coins -= item.price;
-        await user.save();
+        if (!IS_LOCAL) {
+            user.coins -= item.price;
+            await user.save();
+        }
         await user.addItem(item);
 
         res.json({ success: true, coins: user.coins, message: `Куплено: ${item.name}!` });
@@ -344,10 +353,12 @@ app.post("/api/bet/start", authenticateToken, async (req, res) => {
         }
 
         if (betAmount <= 0) return res.status(400).json({ error: "Ставка должна быть больше 0" });
-        if (user.coins < betAmount) return res.status(400).json({ error: "Недостаточно средств" });
+        if (!IS_LOCAL && user.coins < betAmount) return res.status(400).json({ error: "Недостаточно средств" });
 
-        user.coins -= betAmount;
-        await user.save();
+        if (!IS_LOCAL) {
+            user.coins -= betAmount;
+            await user.save();
+        }
 
         // Создаем сессию матча на сервере
         activeMatches.set(req.userId, {
@@ -435,6 +446,18 @@ app.post("/api/match/end", authenticateToken, async (req, res) => {
     } catch (e) { res.status(500).json({ error: "Ошибка сервера" }); }
 });
 
+// БИТВА: ОТМЕНА (выход из тренировки без завершения)
+app.post("/api/match/cancel", authenticateToken, async (req, res) => {
+    const match = activeMatches.get(req.userId);
+
+    if (match) {
+        activeMatches.delete(req.userId);
+        console.log(`🚪 Match cancelled for user ${req.userId}`);
+    }
+
+    res.json({ success: true, message: "Матч отменен" });
+});
+
 // ЭКИПИРОВКА ПРЕДМЕТА (Универсальная)
 app.post('/api/equip', authenticateToken, async (req, res) => {
     const { itemId, itemType } = req.body;
@@ -454,8 +477,10 @@ app.post('/api/equip', authenticateToken, async (req, res) => {
         const item = await Item.findByPk(itemId);
         if (!item) return res.status(404).json({ error: "Предмет не найден" });
 
+        // Allow free items (price === 0) to be equipped without purchase
+        const isFreeItem = item.price === 0;
         const hasItem = await user.hasItem(item);
-        if (!hasItem) return res.status(403).json({ error: "Предмет не куплен" });
+        if (!isFreeItem && !hasItem) return res.status(403).json({ error: "Предмет не куплен" });
 
         // Equip based on item type
         if (item.type === 'border') user.equippedBorderId = itemId;
@@ -497,28 +522,48 @@ app.get('/api/leaderboard', async (req, res) => {
 // НАПОЛНЕНИЕ МАГАЗИНА (SEED)
 async function seedShop() {
     try {
-        const count = await Item.count();
-        if (count === 0) {
-            console.log("🛒 Создание Магазина...");
-            await Item.bulkCreate([
-                // BORDERS (Скины/Рамки)
-                { name: "Кислота", price: 500, type: "border", imageId: "neon_green", color: "#22c55e" },
-                { name: "Магнат", price: 2000, type: "border", imageId: "gold_rush", color: "#facc15" },
-                { name: "Киберпанк", price: 5000, type: "border", imageId: "cyber_punk", color: "#ec4899" },
+        console.log("🛒 Проверка наполнения Магазина...");
 
-                // BACKGROUNDS (Фоны)
-                { name: "Неон", price: 500, type: "background", imageId: "bg_neon", color: "#22d3ee" },
-                { name: "Закат", price: 800, type: "background", imageId: "bg_sunset", color: "#f97316" },
-                { name: "Космос", price: 1200, type: "background", imageId: "bg_space", color: "#8b5cf6" },
-                { name: "Матрица", price: 1500, type: "background", imageId: "bg_matrix", color: "#10b981" },
+        const existingItems = await Item.findAll();
+        const existingNames = existingItems.map(i => i.name);
 
-                // HANDS (Руки)
-                { name: "Робот", price: 750, type: "hands", imageId: "hands_robot", color: "#94a3b8" },
-                { name: "Скелет", price: 600, type: "hands", imageId: "hands_skeleton", color: "#f5f5f4" },
-                { name: "Золото", price: 1500, type: "hands", imageId: "hands_gold", color: "#fbbf24" },
-                { name: "Лава", price: 2000, type: "hands", imageId: "hands_lava", color: "#ef4444" }
-            ]);
-            console.log("✅ Магазин Готов!");
+        const itemsToSeed = [
+            // DEFAULTS (Free)
+            { name: "Обычная рамка", price: 0, type: "border", imageId: "default", color: "#38bdf8" },
+            { name: "Обычный фон", price: 0, type: "background", imageId: "default", color: "#38bdf8" },
+            { name: "Обычные руки", price: 0, type: "hands", imageId: "default", color: "#38bdf8" },
+
+            // BACKGROUNDS (Фоны)
+            { name: "Неон", price: 500, type: "background", imageId: "bg_neon", color: "#22d3ee" },
+            { name: "Закат", price: 1000, type: "background", imageId: "zakat", color: "#f97316" },
+            { name: "Космос", price: 1500, type: "background", imageId: "cosmos", color: "#8b5cf6" },
+
+            // HANDS (Руки)
+            { name: "Танос", price: 3000, type: "hands", imageId: "tanos", color: "#8b5cf6" },
+            { name: "Робокоп", price: 2500, type: "hands", imageId: "robocop", color: "#94a3b8" }
+        ];
+
+        // 1. CLEAR UNWANTED ITEMS FROM DB (Sync with itemsToSeed)
+        const approvedNames = itemsToSeed.map(i => i.name);
+        const deletedCount = await Item.destroy({
+            where: {
+                name: { [Sequelize.Op.notIn]: approvedNames }
+            }
+        });
+
+        if (deletedCount > 0) {
+            console.log(`🗑️ Удалено ${deletedCount} неактуальных предметов из базы.`);
+        }
+
+        let addedCount = 0;
+        for (const item of itemsToSeed) {
+            if (!existingNames.includes(item.name)) {
+                await Item.create(item);
+                addedCount++;
+            }
+        }
+        if (addedCount > 0) {
+            console.log(`✅ Магазин Обновлен! Добавлено ${addedCount} товаров.`);
         }
     } catch (e) { console.error("Ошибка создания магазина", e); }
 }
@@ -545,22 +590,35 @@ io.on("connection", (socket) => {
                 return;
             }
 
-            const match = activeMatches.get(userId);
+            const numericUserId = Number(userId);
+            const match = activeMatches.get(numericUserId);
             if (match && match.active) {
-                socket.emit("error", { message: "Завершите текущую тренировку перед боем PvP" });
-                return;
+                // Auto-cancel stale training match instead of blocking PvP
+                activeMatches.delete(numericUserId);
+                console.log(`🔄 Auto-cancelled stale training match for user ${numericUserId}`);
             }
 
             const existingIdx = pvpQueue.findIndex(p => String(p.userId) === String(userId));
             if (existingIdx !== -1) pvpQueue.splice(existingIdx, 1);
 
-            const user = await User.findByPk(userId);
+            const user = await User.findByPk(userId, {
+                include: [{ model: Item, as: 'Items' }]
+            });
             if (!user) {
                 console.warn(`❌ User not found in DB: ${userId}`);
                 return;
             }
 
-            const player = { socketId: socket.id, userId, nickname: user.username, avatar: user.avatar };
+            const equippedHands = user.Items?.find(item => item.id === user.equippedHandsId);
+            const playerHandImageId = equippedHands?.imageId || null;
+
+            const player = {
+                socketId: socket.id,
+                userId,
+                nickname: user.username,
+                avatar: user.avatar,
+                handSkin: playerHandImageId // Sync the hand skin
+            };
 
             if (pvpQueue.length > 0) {
                 const opponent = pvpQueue.shift();
@@ -573,8 +631,6 @@ io.on("connection", (socket) => {
 
                     if (!p1 || p1.coins < 50 || !p2 || p2.coins < 50) {
                         console.warn(`❌ Match cancelled: Insufficient funds for p1=${p1?.coins} or p2=${p2?.coins}`);
-                        // If one failed, we don't start the match. 
-                        // Simplified: just return. Real app would notify users.
                         return;
                     }
 
@@ -605,8 +661,7 @@ io.on("connection", (socket) => {
                 }
             } else {
                 // Check balance before queuing
-                const user = await User.findByPk(userId);
-                if (user && user.coins >= 50) {
+                if (IS_LOCAL || (user && user.coins >= 50)) {
                     pvpQueue.push(player);
                     socket.emit("waiting_for_opponent");
                 } else {

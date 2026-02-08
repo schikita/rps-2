@@ -20,37 +20,81 @@ interface HandFightAnimationProps {
   playerMove: Move | null;
   botMove: Move | null;
   lastRoundResult: "win" | "lose" | "draw" | null;
-  showResultOverlay?: boolean; // New prop to control visibility
+  showResultOverlay?: boolean;
+  playerHandImageId?: string | null;
+  opponentHandImageId?: string | null; // Added for synced skins
 }
 
-// ... internal functions ...
-
-const getPlayerSprite = (phase: Phase, move: Move | null) => {
-  if (phase !== "reveal" || !move) return playerReady;
-  switch (move) {
-    case "rock":
-      return playerRock;
-    case "scissors":
-      return playerScissors;
-    case "paper":
-      return playerPaper;
-    default:
-      return playerReady;
+const getPlayerSprite = (phase: Phase, move: Move | null, skinId?: string | null) => {
+  if (skinId === 'default' || !skinId) {
+    if (phase !== "reveal" || !move) return playerReady;
+    switch (move) {
+      case "rock": return playerRock;
+      case "scissors": return playerScissors;
+      case "paper": return playerPaper;
+      default: return playerReady;
+    }
   }
+
+  // Handle premium skins (tanos, robocop)
+  const gestures: Record<string, string> = {
+    'tanos': 'tanos-',
+    'robocop': 'robocop-',
+    'hands_skeleton': 'hands_skeleton_',
+    'hands_gold': 'hands_gold_'
+  };
+
+  const prefix = gestures[skinId] || `${skinId}_`;
+
+  if (phase !== "reveal" || !move) {
+    if (skinId === 'tanos' || skinId === 'robocop') return `/images/${prefix}rock.png`;
+    return `/images/${prefix}rock.png`;
+  }
+
+  let moveSuffix = move;
+  if (skinId === 'tanos') {
+    if (move === 'scissors') moveSuffix = 'nojn' as any;
+  } else if (skinId === 'robocop') {
+    if (move === 'scissors') moveSuffix = 'sci' as any;
+  }
+
+  return `/images/${prefix}${moveSuffix}.png`;
 };
 
-const getBotSprite = (phase: Phase, move: Move | null) => {
-  if (phase !== "reveal" || !move) return botReady;
-  switch (move) {
-    case "rock":
-      return botRock;
-    case "scissors":
-      return botScissors;
-    case "paper":
-      return botPaper;
-    default:
-      return botReady;
+const getBotSprite = (phase: Phase, move: Move | null, skinId?: string | null) => {
+  if (skinId === 'default' || !skinId) {
+    if (phase !== "reveal" || !move) return botReady;
+    switch (move) {
+      case "rock": return botRock;
+      case "scissors": return botScissors;
+      case "paper": return botPaper;
+      default: return botReady;
+    }
   }
+
+  // Handle premium skins
+  const gestures: Record<string, string> = {
+    'tanos': 'tanos-',
+    'robocop': 'robocop-',
+    'hands_skeleton': 'hands_skeleton_',
+    'hands_gold': 'hands_gold_'
+  };
+
+  const prefix = gestures[skinId] || `${skinId}_`;
+
+  if (phase !== "reveal" || !move) {
+    if (skinId === 'tanos' || skinId === 'robocop') return `/images/${prefix}rock.png`;
+    return `/images/${prefix}rock.png`;
+  }
+
+  let moveSuffix = move;
+  if (skinId === 'tanos') {
+    if (move === 'scissors') moveSuffix = 'nojn' as any;
+  } else if (skinId === 'robocop') {
+    if (move === 'scissors') moveSuffix = 'sci' as any;
+  }
+
+  return `/images/${prefix}${moveSuffix}.png`;
 };
 
 export const HandFightAnimation: React.FC<HandFightAnimationProps> = ({
@@ -59,10 +103,12 @@ export const HandFightAnimation: React.FC<HandFightAnimationProps> = ({
   playerMove,
   botMove,
   lastRoundResult,
-  showResultOverlay = true, // Default to true
+  showResultOverlay = true,
+  playerHandImageId = null,
+  opponentHandImageId = null,
 }) => {
-  const playerSprite = getPlayerSprite(phase, playerMove);
-  const botSprite = getBotSprite(phase, botMove);
+  const playerSprite = getPlayerSprite(phase, playerMove, playerHandImageId);
+  const botSprite = getBotSprite(phase, botMove, opponentHandImageId);
 
   const isShaking = phase === "countdown";
 

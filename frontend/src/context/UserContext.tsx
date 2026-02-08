@@ -19,7 +19,7 @@ const mapUser = (data: any): User => {
         id: data.id,
         nickname: data.username || data.nickname || "Player",
         email: data.email,
-        avatar: data.avatar || "/avatars/skin-1.jpg",
+        avatar: data.avatar || "/avatars/boy.jpg",
         points: data.coins !== undefined ? data.coins : (data.points || 0),
         inventory: inv,
         last_claim_date: data.last_claim_date || data.lastLoginDate,
@@ -29,7 +29,9 @@ const mapUser = (data: any): User => {
         equippedHandsId: data.equippedHandsId || null,
         wins: data.wins || 0,
         losses: data.losses || 0,
-        total_earned: data.total_earned || 0
+
+        total_earned: data.total_earned || 0,
+        Items: data.Items || []
     };
 };
 

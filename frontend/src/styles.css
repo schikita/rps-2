@@ -342,6 +342,36 @@ button,
   transform: translateX(-2px);
 }
 
+/* NEW PREMIUM BACK BUTTON */
+.back-btn-new {
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(148, 163, 255, 0.3);
+  color: #fff;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.back-btn-new:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 20px rgba(34, 211, 238, 0.3);
+  transform: scale(1.05) translateY(-1px);
+}
+
+.back-btn-new:active {
+  transform: scale(0.95);
+}
+
 /* SHOP BUTTONS */
 .shop-btn {
   width: 100%;
@@ -649,7 +679,7 @@ button,
   max-width: 448px;
   /* Flexible height for small screens */
   flex: 1;
-  min-height: 220px;
+  min-height: 380px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -664,10 +694,11 @@ button,
 }
 
 .hand-image {
-  width: clamp(80px, 15vh, 180px);
-  max-width: 40vw;
-  height: auto;
+  width: clamp(160px, 25vh, 220px);
+  height: clamp(160px, 25vh, 220px);
+  max-width: 60vw;
   object-fit: contain;
+  transition: transform 0.2s ease-out;
 }
 
 .hand-image--bot {

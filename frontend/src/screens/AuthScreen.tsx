@@ -4,12 +4,10 @@ import { CustomModal } from "../components/CustomModal";
 
 // --- PUBLIC IMAGES ---
 const PRESET_AVATARS = [
-  "/avatars/skin-1.jpg",
-  "/avatars/skin-2.jpg",
-  "/avatars/skin-3.jpg",
-  "/avatars/skin-4.jpg",
-  "/avatars/skin-5.jpg",
-  "/avatars/skin-6.jpg",
+  "/avatars/boy.jpg",
+  "/avatars/cyber.jpg",
+  "/avatars/princessDune.jpg",
+  "/avatars/roboCop.jpg",
 ];
 
 interface AuthScreenProps {
@@ -57,7 +55,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Telegram Auth failed");
+      if (!res.ok) throw new Error(data.error || "Ошибка авторизации через Telegram");
 
       onLoginSuccess(data.user, data.token);
     } catch (err: any) {
@@ -121,7 +119,7 @@ export const AuthScreen: React.FC<AuthScreenProps> = ({ onLoginSuccess }) => {
       }
     } catch (err: unknown) {
       // Error Modal
-      showModal("ОШИБКА АВТОРИЗАЦИИ", (err as Error).message || "Unknown error", "error");
+      showModal("ОШИБКА АВТОРИЗАЦИИ", (err as Error).message || "Неизвестная ошибка", "error");
     }
   };
 

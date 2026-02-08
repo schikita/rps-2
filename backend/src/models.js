@@ -43,7 +43,7 @@ const User = sequelize.define('User', {
     telegramId: { type: DataTypes.STRING, unique: true, allowNull: true },
     email: { type: DataTypes.STRING, unique: true, allowNull: true, validate: { isEmail: true } },
     password: { type: DataTypes.STRING, allowNull: true },
-    avatar: { type: DataTypes.STRING, defaultValue: "/avatars/skin-1.jpg" },
+    avatar: { type: DataTypes.STRING, defaultValue: "/avatars/boy.jpg" },
 
     // ЭКОНОМИКА: Стартовые деньги 1000
     coins: {

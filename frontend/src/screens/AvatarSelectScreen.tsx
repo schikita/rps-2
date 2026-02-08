@@ -2,12 +2,10 @@ import React from "react";
 
 // --- NO IMPORTS NEEDED ---
 const PRESET_AVATARS = [
-  "/avatars/skin-1.jpg",
-  "/avatars/skin-2.jpg",
-  "/avatars/skin-3.jpg",
-  "/avatars/skin-4.jpg",
-  "/avatars/skin-5.jpg",
-  "/avatars/skin-6.jpg",
+  "/avatars/boy.jpg",
+  "/avatars/cyber.jpg",
+  "/avatars/princessDune.jpg",
+  "/avatars/roboCop.jpg",
 ];
 
 interface Props {
@@ -16,7 +14,7 @@ interface Props {
 }
 
 export const AvatarSelectScreen: React.FC<Props> = ({ nickname, onSelect }) => {
-  
+
   const handleUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;

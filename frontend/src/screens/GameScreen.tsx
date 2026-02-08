@@ -42,7 +42,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
     // Game State
     const [playerMove, setPlayerMove] = useState<Move | null>(null);
     const [opponentMove, setOpponentMove] = useState<Move | null>(null);
-    const [opponent, setOpponent] = useState<{ nickname: string, avatar: string, id: any } | null>(null);
+    const [opponent, setOpponent] = useState<{ nickname: string, avatar: string, id: any, handSkin?: string | null } | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [phase, setPhase] = useState<Phase>("lobby");
     const [countdown, setCountdown] = useState<number | null>(null);
@@ -73,7 +73,8 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
                 setOpponent({
                     nickname: otherPlayer.nickname,
                     avatar: otherPlayer.avatar,
-                    id: otherPlayer.userId
+                    id: otherPlayer.userId,
+                    handSkin: otherPlayer.handSkin
                 });
                 setPvpRoomId(data.roomId);
                 setPhase("idle");
@@ -235,6 +236,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
 
     const startArena = async () => {
         playSound('click_main');
+        setErrorMsg(null); // Clear any previous error
         if (mode === "bot") {
             setIsLoading(true);
             try {
@@ -349,7 +351,7 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: '0 4px', height: '44px' }}>
                 <button onClick={onBack} className="back-btn">← Назад</button>
                 <div style={{ flex: 1, textAlign: 'center' }}>
-                    <span className="game-header-title" style={{ color: mode === 'pvp' ? '#f87171' : '#4ade80' }}>
+                    <span className="game-header-title" style={{ color: '#4ade80' }}>
                         {mode === 'pvp' ? 'АРЕНА ОНЛАЙН' : 'ТРЕНИРОВКА'}
                     </span>
                 </div>
@@ -367,13 +369,13 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
             {phase === "lobby" && (
                 <div className="lobby-panel">
                     <div style={{ marginBottom: 10, textAlign: 'center' }}>
-                        <img src={mode === 'bot' ? "/images/Training.png" : "/images/pvp.png"} alt="Mode" style={{ width: mode === 'bot' ? '80px' : '120px', height: mode === 'bot' ? '80px' : '120px', objectFit: 'contain' }} />
+                        <img src={mode === 'bot' ? "/images/Training.png" : "/images/pvp.png"} alt="Mode" style={{ width: '80px', height: '80px', objectFit: 'contain' }} />
                     </div>
-                    <p className="lobby-title">{mode === 'bot' ? 'Тренировка' : 'Рейтинговый бой'}</p>
-                    <p className="lobby-text">{mode === 'bot' ? 'Победа: +15' : 'Награда: +50'} <img src="/images/coin.png" alt="coin" className="coin-icon" /></p>
+                    <p className="lobby-title">Тренировка</p>
+                    <p className="lobby-text">Победа: {mode === 'bot' ? '+15' : '+50'} <img src="/images/coin.png" alt="coin" className="coin-icon" /></p>
                     <p className="error-msg" style={{ minHeight: '1.2rem', margin: '4px 0', visibility: errorMsg ? 'visible' : 'hidden' }}>{errorMsg || ' '}</p>
-                    <button className="primary-btn" onClick={startArena} disabled={isLoading} style={{ '--theme-color': themeColor, marginTop: 10 } as React.CSSProperties}>
-                        {isLoading ? "Загрузка..." : mode === 'bot' ? "Начать бой" : "Найти противника"}
+                    <button className="primary-btn" onClick={startArena} disabled={isLoading} style={{ '--theme-color': '#4ade80', marginTop: 10 } as React.CSSProperties}>
+                        {isLoading ? "Загрузка..." : "Начать бой"}
                     </button>
                 </div>
             )}
@@ -404,14 +406,24 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
                     </div>
 
                     <div style={{ flex: 1, position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                        <HandFightAnimation
-                            phase={phase === "idle" ? "idle" : phase === "matchOver" ? "reveal" : phase}
-                            countdown={countdown}
-                            playerMove={playerMove}
-                            botMove={opponentMove}
-                            lastRoundResult={lastRoundResult}
-                            showResultOverlay={!showResultReport}
-                        />
+                        {/* Find imageId of equipped hands skin */}
+                        {(() => {
+                            const equippedHands = (user as any).Items?.find((item: any) => item.id === user.equippedHandsId);
+                            const playerHandImageId = equippedHands?.imageId;
+
+                            return (
+                                <HandFightAnimation
+                                    phase={phase === "idle" ? "idle" : phase === "matchOver" ? "reveal" : phase}
+                                    countdown={countdown}
+                                    playerMove={playerMove}
+                                    botMove={opponentMove}
+                                    lastRoundResult={lastRoundResult}
+                                    showResultOverlay={!showResultReport}
+                                    playerHandImageId={playerHandImageId}
+                                    opponentHandImageId={opponent?.handSkin} // Pass synced opponent skin
+                                />
+                            );
+                        })()}
 
                         {isVisible && createPortal(
                             <div className="score-panel">

@@ -149,9 +149,9 @@ export const PrivacyPolicyRules: React.FC<PrivacyPolicyRulesProps> = ({ onBack, 
                             <>
                                 <h1 style={{ fontSize: '1.2rem', marginBottom: '10px', color: '#fff' }}>Политика конфиденциальности</h1>
                                 <p style={{ fontSize: '0.8rem', opacity: 0.7, marginBottom: '20px' }}>
-                                    Версия: 0.1 (beta)<br />
+                                    Версия: 0.1 (бета)<br />
                                     Дата вступления в силу: 01.01.2026<br />
-                                    Telegram bot: coming soon
+                                    Telegram бот: скоро
                                 </p>
 
                                 <h3 style={{ color: '#fff', marginTop: '20px', marginBottom: '10px' }}>1. Общие положения</h3>
@@ -215,7 +215,7 @@ export const PrivacyPolicyRules: React.FC<PrivacyPolicyRulesProps> = ({ onBack, 
                             <>
                                 <h1 style={{ fontSize: '1.2rem', marginBottom: '10px', color: '#fff' }}>Пользовательское соглашение</h1>
                                 <p style={{ fontSize: '0.8rem', opacity: 0.7, marginBottom: '20px' }}>
-                                    Версия: 0.1 (beta)<br />
+                                    Версия: 0.1 (бета)<br />
                                     Дата: 01.01.2026<br />
                                     Контакт: телеграм-бот
                                 </p>

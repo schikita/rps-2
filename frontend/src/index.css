@@ -18,6 +18,7 @@ a {
   color: #646cff;
   text-decoration: inherit;
 }
+
 a:hover {
   color: #535bf2;
 }
@@ -46,9 +47,11 @@ button {
   cursor: pointer;
   transition: border-color 0.25s;
 }
+
 button:hover {
   border-color: #646cff;
 }
+
 button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
@@ -59,11 +62,51 @@ button:focus-visible {
     color: #213547;
     background-color: #ffffff;
   }
+
   a:hover {
     color: #747bff;
   }
 
   button {
     background-color: #f9f9f9;
+  }
+}
+
+/* BORDER SKINS */
+.border-neon_green {
+  border: 3px solid #22c55e !important;
+  box-shadow: 0 0 15px rgba(34, 197, 94, 0.6), inset 0 0 10px rgba(34, 197, 94, 0.4) !important;
+}
+
+.border-gold_rush {
+  border: 3px solid #facc15 !important;
+  box-shadow: 0 0 20px rgba(250, 204, 21, 0.7), inset 0 0 10px rgba(250, 204, 21, 0.5) !important;
+  background: linear-gradient(135deg, rgba(250, 204, 21, 0.1), rgba(250, 204, 21, 0.2)) !important;
+}
+
+.border-cyber_punk {
+  border: 3px solid #ec4899 !important;
+  box-shadow: 0 0 15px #ec4899, 0 0 30px #06b6d4 !important;
+  animation: neon-flicker 2s infinite !important;
+}
+
+@keyframes neon-flicker {
+
+  0%,
+  19%,
+  21%,
+  23%,
+  25%,
+  54%,
+  56%,
+  100% {
+    opacity: 1;
+  }
+
+  20%,
+  22%,
+  24%,
+  55% {
+    opacity: 0.8;
   }
 }

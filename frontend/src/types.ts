@@ -16,4 +16,14 @@ export interface User {
     wins: number;
     losses: number;
     total_earned: number;
+    Items?: Item[];
+}
+
+export interface Item {
+    id: number;
+    name: string;
+    price: number;
+    imageId: string;
+    color: string;
+    type: 'avatar' | 'border' | 'background' | 'hands' | 'effect';
 }
