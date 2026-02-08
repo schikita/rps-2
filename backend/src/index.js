@@ -74,6 +74,38 @@ const authenticateToken = (req, res, next) => {
     }
 };
 
+// Вспомогательная функция для выдачи бесплатных предметов
+async function ensureDefaultItems(user) {
+    try {
+        const defaultItems = await Item.findAll({ where: { imageId: 'default' } });
+        const userItems = await user.getItems();
+        const userItemIds = userItems.map(i => i.id);
+
+        let changed = false;
+        for (const item of defaultItems) {
+            if (!userItemIds.includes(item.id)) {
+                await user.addItem(item);
+                changed = true;
+            }
+
+            // Экипируем, если ничего не выбрано
+            if (item.type === 'hands' && !user.equippedHandsId) {
+                user.equippedHandsId = item.id;
+                changed = true;
+            } else if (item.type === 'background' && !user.equippedBackgroundId) {
+                user.equippedBackgroundId = item.id;
+                changed = true;
+            } else if (item.type === 'border' && !user.equippedBorderId) {
+                user.equippedBorderId = item.id;
+                changed = true;
+            }
+        }
+        if (changed) await user.save();
+    } catch (e) {
+        console.error("Ошибка выдачи стандартных предметов:", e);
+    }
+}
+
 app.get("/health", (req, res) => res.json({ ok: true }));
 
 // АВТОРИЗАЦИЯ: РЕГИСТРАЦИЯ
@@ -95,6 +127,8 @@ app.post("/auth/register", async (req, res) => {
             password: hash,
             avatar: avatar || "/avatars/boy.jpg"
         });
+
+        await ensureDefaultItems(newUser);
 
         const token = jwt.sign({ id: newUser.id }, JWT_SECRET, { expiresIn: '7d' });
         res.json({ token, user: newUser });
@@ -142,6 +176,7 @@ app.post("/auth/telegram", async (req, res) => {
                 email: safeEmail,
                 avatar: newAvatar
             });
+            await ensureDefaultItems(user);
         } else {
             // Обновляем аватар, если он изменился в Telegram
             if (user.avatar !== newAvatar) {
@@ -169,6 +204,7 @@ app.post("/auth/login", async (req, res) => {
         }
 
         const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '7d' });
+        await ensureDefaultItems(user);
         res.json({ token, user });
     } catch (e) {
         res.status(500).json({ error: "Ошибка сервера" });
@@ -182,6 +218,8 @@ app.get("/api/user", authenticateToken, async (req, res) => {
             include: { model: Item, through: { attributes: [] } }
         });
         if (!user) return res.status(404).json({ error: "Пользователь не найден" });
+
+        await ensureDefaultItems(user);
 
         const userData = user.toJSON();
         if (IS_LOCAL) {

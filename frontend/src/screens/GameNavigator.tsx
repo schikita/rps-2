@@ -750,8 +750,8 @@ export const GameNavigator: React.FC = () => {
 
                 <div style={{ display: 'flex', justifyContent: 'center', gap: 25, alignItems: 'center', marginBottom: 5 }}>
                   <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '2.2rem', fontWeight: 900, lineHeight: 1, fontFamily: 'Bounded' }}>25</div>
-                    <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: 6, fontWeight: 600 }}>ДЕКАБРЯ</div>
+                    <div style={{ fontSize: '2.2rem', fontWeight: 900, lineHeight: 1, fontFamily: 'Bounded' }}>17</div>
+                    <div style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: 6, fontWeight: 600 }}>ИЮЛЯ</div>
                   </div>
                   <div style={{ width: 2, height: 45, background: `linear-gradient(to bottom, transparent, ${currentThemeColor}40, transparent)` }}></div>
                   <div style={{ textAlign: 'center' }}>
@@ -844,7 +844,7 @@ export const GameNavigator: React.FC = () => {
                     border: '3px solid #0f172a',
                     boxShadow: `0 0 10px ${currentThemeColor}`
                   }}>
-                    {Math.floor(user.wins / 10) + 1}
+                    {userLevel.level}
                   </div>
                 </div>
 

@@ -214,6 +214,14 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
 
     const isBonusReady = !user.last_claim_date || (new Date().toISOString().split('T')[0] !== user.last_claim_date);
 
+    // Handle back button - disconnect socket first for PvP (causes forfeit)
+    const handleGameBack = () => {
+        if (mode === "pvp" && socket.connected) {
+            socket.disconnect(); // This triggers disconnect handler on server, opponent wins
+        }
+        onBack();
+    };
+
 
 
     const resetToLobby = () => {
@@ -348,48 +356,122 @@ export const GameScreen: React.FC<GameScreenProps> = ({ mode, onBack, onOpenWall
 
     return (
         <div ref={rootRef} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, padding: '0 4px', height: '44px' }}>
-                <button onClick={onBack} className="back-btn">← Назад</button>
-                <div style={{ flex: 1, textAlign: 'center' }}>
-                    <span className="game-header-title" style={{ color: '#4ade80' }}>
-                        {mode === 'pvp' ? 'АРЕНА ОНЛАЙН' : 'ТРЕНИРОВКА'}
-                    </span>
+            {/* Standard Header (User Pill + Wallet) - Only in Lobby/Matching */}
+            {(phase === "lobby" || phase === "matching") && (
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, marginTop: 10, padding: "0 4px" }}>
+                    <div
+                        className="user-pill menu-card"
+                        onClick={onBack}
+                        style={{
+                            padding: '8px 12px',
+                            borderRadius: '999px',
+                            gap: 8,
+                            cursor: 'pointer',
+                            border: '1px solid rgba(148, 163, 255, 0.4)',
+                            maxWidth: '160px',
+                            overflow: 'hidden',
+                            display: 'flex',
+                            alignItems: 'center'
+                        }}
+                    >
+                        <img src={user.avatar} style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} alt="User" />
+                        <span style={{
+                            fontWeight: 600,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                        }}>
+                            {user.nickname}
+                        </span>
+                    </div>
+
+                    <div
+                        className="wallet-widget menu-card"
+                        onClick={onOpenWallet}
+                        style={{ borderColor: themeColor, cursor: 'pointer', padding: '8px 12px', borderRadius: '999px', gap: 8, position: 'relative', display: 'flex', alignItems: 'center' }}
+                    >
+                        <img src="/images/coin.png" alt="coin" className="coin-icon" />
+                        <span style={{ color: themeColor }}>{balance}</span>
+                        {isBonusReady && <div className="notification-dot" />}
+                    </div>
                 </div>
-                <div style={{ width: '100px', display: 'flex', justifyContent: 'flex-end' }}>
-                    {!isGameActive && phase !== "matching" && (
-                        <div className="wallet-widget menu-card" onClick={onOpenWallet} style={{ borderColor: themeColor, padding: '8px 12px', borderRadius: '999px', gap: 8, margin: 0, position: 'relative' }}>
-                            <img src="/images/coin.png" alt="coin" className="coin-icon" />
-                            <span style={{ color: themeColor, fontWeight: 'bold' }}>{balance}</span>
-                            {isBonusReady && <div className="notification-dot" />}
-                        </div>
-                    )}
+            )}
+
+            {/* Screen Name & Back Button Row */}
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 20, padding: '0 4px', height: '44px' }}>
+                <button onClick={handleGameBack} className="back-btn-new">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M15 18l-6-6 6-6" />
+                    </svg>
+                </button>
+                <div style={{ flex: 1, textAlign: 'center', fontFamily: 'Bounded', fontSize: '1.2rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+                    {mode === 'pvp' ? 'АРЕНА PvP' : 'ТРЕНИРОВКА'}
                 </div>
+                <div style={{ width: 42 }}></div> {/* Spacer for centering */}
             </div>
 
             {phase === "lobby" && (
-                <div className="lobby-panel">
-                    <div style={{ marginBottom: 10, textAlign: 'center' }}>
-                        <img src={mode === 'bot' ? "/images/Training.png" : "/images/pvp.png"} alt="Mode" style={{ width: '80px', height: '80px', objectFit: 'contain' }} />
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '0 10px', gap: 15 }}>
+                    {/* Header Card with Icon */}
+                    <div className="menu-card" style={{
+                        padding: '30px 20px',
+                        textAlign: 'center',
+                        background: `linear-gradient(180deg, ${themeColor}10 0%, rgba(255,255,255,0.02) 100%)`,
+                        border: `1px solid ${themeColor}30`,
+                        position: 'relative',
+                        overflow: 'hidden',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center'
+                    }}>
+                        <div style={{ position: 'absolute', top: -10, right: -10, fontSize: '4rem', opacity: 0.05 }}>
+                            {mode === 'bot' ? '🤖' : '⚔️'}
+                        </div>
+                        <img
+                            src={mode === 'bot' ? "/images/Training.png" : "/images/pvp.png"}
+                            alt="Mode"
+                            style={{ width: '100px', height: '100px', objectFit: 'contain', marginBottom: 20, filter: `drop-shadow(0 0 15px ${themeColor}40)` }}
+                        />
+                        <div style={{ fontSize: '0.8rem', color: themeColor, fontWeight: 800, marginBottom: 10, letterSpacing: '0.2em' }}>
+                            {mode === 'bot' ? 'ТРЕНИРОВОЧНЫЙ РЕЖИМ' : 'АРЕНА ОНЛАЙН'}
+                        </div>
+                        <p style={{ opacity: 0.7, fontSize: '0.9rem', lineHeight: '1.4', margin: 0 }}>
+                            {mode === "bot"
+                                ? "Оттачивайте свои навыки игры против нейросети Cyber-RPS."
+                                : "Сразитесь с реальным противником в битве за рейтинг и крипто-монеты."}
+                        </p>
                     </div>
-                    <p className="lobby-title">Тренировка</p>
-                    <p className="lobby-text">Победа: {mode === 'bot' ? '+15' : '+50'} <img src="/images/coin.png" alt="coin" className="coin-icon" /></p>
-                    <p className="error-msg" style={{ minHeight: '1.2rem', margin: '4px 0', visibility: errorMsg ? 'visible' : 'hidden' }}>{errorMsg || ' '}</p>
-                    <button className="primary-btn" onClick={startArena} disabled={isLoading} style={{ '--theme-color': '#4ade80', marginTop: 10 } as React.CSSProperties}>
-                        {isLoading ? "Загрузка..." : "Начать бой"}
-                    </button>
+
+                    {/* Rewards Card */}
+                    <div className="menu-card" style={{ padding: '20px', textAlign: 'center', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div style={{ fontSize: '0.75rem', color: themeColor, fontWeight: 700, marginBottom: 10, letterSpacing: '0.1em' }}>ПРИЗ ЗА ПОБЕДУ</div>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                            <img src="/images/coin.png" alt="coin" className="coin-icon" style={{ width: '1.8rem', height: '1.8rem' }} />
+                            <span style={{ fontWeight: 900, fontSize: '2rem', color: '#facc15', fontFamily: 'Bounded' }}>
+                                {mode === 'bot' ? '15' : '50'}
+                            </span>
+                            <span style={{ color: '#facc15', fontSize: '0.9rem', fontWeight: 700 }}>МОНЕТ</span>
+                        </div>
+                    </div>
+
+                    <div style={{ marginTop: 'auto', paddingBottom: 20 }}>
+                        <p className="error-msg" style={{ minHeight: '1.2rem', margin: '4px 0', textAlign: 'center', visibility: errorMsg ? 'visible' : 'hidden' }}>{errorMsg || ' '}</p>
+                        <button className="primary-btn" onClick={startArena} disabled={isLoading} style={{ '--theme-color': themeColor, width: '100%' } as React.CSSProperties}>
+                            {isLoading ? "ПОДГОТОВКА..." : "ВСТУПИТЬ В БОЙ"}
+                        </button>
+                    </div>
                 </div>
             )}
 
             {phase === "matching" && (
-                <div className="lobby-panel">
-                    <div className="loader" style={{ borderColor: themeColor, borderTopColor: 'transparent' }}></div>
-                    <p className="lobby-title" style={{ marginTop: 20 }}>Поиск противника...</p>
-                    <p className="lobby-text">Это может занять несколько секунд</p>
-                    <button className="secondary-btn" onClick={resetToLobby} style={{ marginTop: 20 }}>Отмена</button>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '0 20px' }}>
+                    <div className="loader" style={{ borderColor: themeColor, borderTopColor: 'transparent', width: '50px', height: '50px' }}></div>
+                    <div style={{ marginTop: 30, textAlign: 'center' }}>
+                        <div style={{ fontFamily: 'Bounded', fontSize: '1.2rem', marginBottom: 10, letterSpacing: '0.1em' }}>ПОИСК СОПЕРНИКА</div>
+                        <p style={{ opacity: 0.6, fontSize: '0.9rem' }}>Пожалуйста, подождите. Мы подбираем достойного бойца для вас...</p>
+                    </div>
                 </div>
             )}
-
-
 
 
             {isGameActive && (

@@ -97,7 +97,11 @@ export const DailyBonusScreen: React.FC<DailyBonusScreenProps> = ({ onBack, them
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100%', padding: '0 4px' }}>
 
       <div style={{ display: "flex", alignItems: "center", marginBottom: 20, marginTop: 10 }}>
-        <button onClick={onBack} className="back-btn">← Назад</button>
+        <button onClick={onBack} className="back-btn-new">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M15 18l-6-6 6-6" />
+          </svg>
+        </button>
       </div>
 
       <div style={{ textAlign: 'center', marginBottom: 20 }}>
